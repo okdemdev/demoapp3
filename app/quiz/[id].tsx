@@ -76,7 +76,8 @@ export default function QuizScreen() {
       if (questionId < quizQuestions.length) {
         router.push(`/quiz/${questionId + 1}`);
       } else {
-        router.push('/results');
+        // Navigate to the onboarding screen instead of results
+        router.push('/onboarding');
       }
     }
   };
