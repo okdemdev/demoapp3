@@ -62,8 +62,9 @@ export default function HabitsQuizScreen() {
         console.log(`Is last question: ${isLastQuestion}`);
     }, [currentQuestion]);
 
+    // Animated values setup for slider
     const screenWidth = Dimensions.get('window').width;
-    const sliderWidth = screenWidth - 80;
+    const sliderWidth = screenWidth - 80; // Accounting for container padding
     const [sliderPosition] = useState(new Animated.Value(0));
 
     useEffect(() => {
@@ -91,28 +92,23 @@ export default function HabitsQuizScreen() {
     const progress = (currentIndex + 1) / totalQuestions;
 
     const handleSliderChange = (position: number) => {
-        // Handle positioning
-        const totalSteps = currentQuestion.sliderOptions?.labels.length || 5;
-        const stepWidth = sliderWidth / (totalSteps - 1);
+        // Ensure position is within bounds
+        const clampedPosition = Math.max(0, Math.min(position, sliderWidth));
 
         // Calculate which step the user is closest to
-        let step = Math.round(position / stepWidth) + 1;
+        const totalOptions = currentQuestion.sliderOptions?.labels?.length || 5;
+        const stepWidth = sliderWidth / (totalOptions - 1);
+        let step = Math.round(clampedPosition / stepWidth) + 1;
 
-        // Make sure step is valid (between 1 and max)
-        step = Math.max(1, Math.min(totalSteps, step));
+        // Ensure step is valid
+        step = Math.max(1, Math.min(totalOptions, step));
 
-        // Only update if different to avoid unnecessary re-renders
         if (step !== selectedValue) {
             setSelectedValue(step);
 
-            // Animate to the correct position for this step
-            const newPosition = (step - 1) * stepWidth;
-            Animated.spring(sliderPosition, {
-                toValue: newPosition,
-                useNativeDriver: false,
-                friction: 8,
-                tension: 40,
-            }).start();
+            // Calculate precise position for this step
+            const snappedPosition = (step - 1) * stepWidth;
+            sliderPosition.setValue(snappedPosition);
         }
     };
 
@@ -242,23 +238,45 @@ export default function HabitsQuizScreen() {
                 {/* Selected value label */}
                 <Text style={styles.scaleValue}>{selectedLabel}</Text>
 
-                {/* Custom slider */}
-                <View
-                    style={styles.sliderContainer}
-                    onStartShouldSetResponder={() => true}
-                    onMoveShouldSetResponder={() => true}
-                    onResponderGrant={(e) => {
-                        const { locationX } = e.nativeEvent;
-                        handleSliderChange(locationX);
-                    }}
-                    onResponderMove={(e) => {
-                        const { locationX } = e.nativeEvent;
-                        handleSliderChange(locationX);
-                    }}
-                >
+                {/* Custom slider - rebuilt from scratch */}
+                <View style={styles.sliderContainer}>
+                    {/* Base track line */}
                     <View style={styles.sliderTrack} />
+
+                    {/* Tick marks */}
+                    {currentQuestion.sliderOptions?.labels?.map((_, index) => {
+                        const totalOptions = currentQuestion.sliderOptions?.labels?.length || 5;
+                        const percentage = index * (100 / (totalOptions - 1));
+                        return (
+                            <View
+                                key={index}
+                                style={[
+                                    styles.sliderTick,
+                                    { left: `${percentage}%` as any }
+                                ]}
+                            />
+                        );
+                    })}
+
+                    {/* Draggable thumb */}
                     <Animated.View
-                        style={[styles.sliderThumb, { left: sliderPosition }]}
+                        style={[
+                            styles.sliderThumb,
+                            { left: sliderPosition }
+                        ]}
+                    />
+
+                    {/* Touch area - full width transparent overlay */}
+                    <View
+                        style={styles.touchArea}
+                        onTouchStart={(e) => {
+                            const { locationX } = e.nativeEvent;
+                            handleSliderChange(locationX);
+                        }}
+                        onTouchMove={(e) => {
+                            const { locationX } = e.nativeEvent;
+                            handleSliderChange(locationX);
+                        }}
                     />
                 </View>
             </View>
@@ -372,31 +390,49 @@ const styles = StyleSheet.create({
     },
     sliderContainer: {
         width: '100%',
-        height: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 20,
+        height: 30,
         position: 'relative',
+        marginBottom: 20,
+        justifyContent: 'center',
     },
     sliderTrack: {
-        width: '100%',
+        position: 'absolute',
+        left: 0,
+        right: 0,
         height: 2,
         backgroundColor: '#333',
+        top: 14, // Center vertically in the container
+    },
+    sliderTick: {
         position: 'absolute',
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#555',
+        top: 12, // Center with the track (14 - 1 = 13, 13 - 3 = 10)
+        marginLeft: -3,
     },
     sliderThumb: {
+        position: 'absolute',
         width: 28,
         height: 28,
         borderRadius: 14,
         backgroundColor: '#ff7300',
-        position: 'absolute',
-        top: 6,
-        marginLeft: -14,
+        top: 1, // Center with the track
+        marginLeft: -14, // Center the thumb horizontally
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 3.84,
         elevation: 5,
+    },
+    touchArea: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        backgroundColor: 'transparent',
     },
     footer: {
         padding: 20,
