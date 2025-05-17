@@ -49,24 +49,6 @@ export default function PlanScreen() {
     );
   }
 
-  if (error) {
-    return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <Text style={styles.title}>Oops!</Text>
-        <Text style={styles.subtitle}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={generatePlan}>
-          <Ionicons
-            name="refresh"
-            size={24}
-            color="#ffffff"
-            style={styles.retryIcon}
-          />
-          <Text style={styles.retryText}>Try Again</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   if (isLoading) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -88,29 +70,32 @@ export default function PlanScreen() {
         </TouchableOpacity>
       </View>
       <Text style={styles.subtitle}>
-        Personalized guidance for your journey
+        {error || 'Personalized guidance for your journey'}
       </Text>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {userData.plan?.weeks.map((week) => (
-          <View key={week.weekNumber} style={styles.weekContainer}>
-            <View style={styles.weekHeader}>
-              <Text style={styles.weekTitle}>Week {week.weekNumber}</Text>
-              <Text style={styles.weekDates}>
-                {new Date(week.startDate).toLocaleDateString()} -{' '}
-                {new Date(week.endDate).toLocaleDateString()}
-              </Text>
-            </View>
-            {week.improvements.map((improvement, index) => (
-              <View key={index} style={styles.improvementItem}>
-                {improvement.icon && (
-                  <Text style={styles.improvementIcon}>{improvement.icon}</Text>
-                )}
-                <Text style={styles.improvementText}>{improvement.text}</Text>
+        {!error &&
+          userData.plan?.weeks.map((week) => (
+            <View key={week.weekNumber} style={styles.weekContainer}>
+              <View style={styles.weekHeader}>
+                <Text style={styles.weekTitle}>Week {week.weekNumber}</Text>
+                <Text style={styles.weekDates}>
+                  {new Date(week.startDate).toLocaleDateString()} -{' '}
+                  {new Date(week.endDate).toLocaleDateString()}
+                </Text>
               </View>
-            ))}
-          </View>
-        ))}
+              {week.improvements.map((improvement, index) => (
+                <View key={index} style={styles.improvementItem}>
+                  {improvement.icon && (
+                    <Text style={styles.improvementIcon}>
+                      {improvement.icon}
+                    </Text>
+                  )}
+                  <Text style={styles.improvementText}>{improvement.text}</Text>
+                </View>
+              ))}
+            </View>
+          ))}
       </ScrollView>
     </View>
   );
@@ -146,23 +131,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  retryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2196F3',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 25,
-    marginTop: 20,
-  },
-  retryIcon: {
-    marginRight: 8,
-  },
-  retryText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
   },
   content: {
     flex: 1,

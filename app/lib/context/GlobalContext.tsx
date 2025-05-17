@@ -120,36 +120,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
             completed: habitsData?.completed || false,
           },
           subscription: subscriptionData || undefined,
-          todos:
-            storedTodos.length > 0
-              ? storedTodos
-              : [
-                  {
-                    id: '1',
-                    text: 'Take a 10-minute meditation break',
-                    completed: false,
-                  },
-                  {
-                    id: '2',
-                    text: 'Drink 8 glasses of water today',
-                    completed: false,
-                  },
-                  {
-                    id: '3',
-                    text: 'Go for a 30-minute walk',
-                    completed: false,
-                  },
-                  {
-                    id: '4',
-                    text: 'Practice deep breathing exercises',
-                    completed: false,
-                  },
-                  {
-                    id: '5',
-                    text: "Write down 3 things you're grateful for",
-                    completed: false,
-                  },
-                ],
+          todos: storedTodos,
           // Initialize metrics with default values
           metrics: {
             wisdom: 10,
