@@ -9,9 +9,17 @@ interface RetryOptions {
   zodSchema?: z.ZodType<any>;
 }
 
+// Type for OpenAI API errors
+interface OpenAIError extends Error {
+  status?: number;
+  type?: string;
+  code?: string;
+}
+
 class OpenAIService {
   private openai: OpenAI;
   private static instance: OpenAIService;
+  private readonly REQUEST_TIMEOUT = 120000; // 2 minutes in milliseconds
 
   private constructor() {
     // Get API key from config
@@ -28,7 +36,7 @@ class OpenAIService {
       this.openai = new OpenAI({
         apiKey: apiKey,
         dangerouslyAllowBrowser: true, // Allow in browser/mobile environment
-        timeout: 30000, // 30-second timeout
+        timeout: this.REQUEST_TIMEOUT,
       });
     } catch (error) {
       console.error('Failed to initialize OpenAI client:', error);
@@ -51,16 +59,31 @@ class OpenAIService {
     options: RetryOptions = {}
   ): Promise<T> {
     const { maxRetries = 5, zodSchema } = options;
-    let lastError: Error | null = null;
+    let lastError: OpenAIError | null = null;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        // Use gpt-3.5-turbo which is more stable and cost-effective
-        const response = await this.openai.chat.completions.create({
-          model: 'gpt-3.5-turbo',
-          messages,
-          temperature: 0.3, // Lower temperature for more deterministic responses
-        });
+        // Create an AbortController for this attempt
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+        }, this.REQUEST_TIMEOUT);
+
+        const response = await this.openai.chat.completions.create(
+          {
+            model: 'gpt-4.1',
+            messages,
+            temperature: 0.5, // Lower temperature for more deterministic responses
+          },
+          { signal: controller.signal }
+        );
+
+        clearTimeout(timeoutId);
+
+        // Log success status
+        console.debug(
+          `OpenAI request successful [Attempt ${attempt + 1}/${maxRetries}]`
+        );
 
         const content = response.choices[0]?.message?.content?.trim();
 
@@ -82,7 +105,16 @@ class OpenAIService {
 
         return content as unknown as T;
       } catch (error) {
-        lastError = error as Error;
+        lastError = error as OpenAIError;
+
+        // Log error details quietly
+        console.debug(`OpenAI attempt ${attempt + 1}/${maxRetries} failed:`, {
+          status: lastError.status,
+          type: lastError.type,
+          message: lastError.message,
+          isTimeout:
+            lastError.name === 'AbortError' || lastError.code === 'ETIMEDOUT',
+        });
 
         if (attempt < maxRetries - 1) {
           // Exponential backoff: 1s, 2s, 4s, 8s, 16s
@@ -92,12 +124,15 @@ class OpenAIService {
       }
     }
 
-    // If we get here, all retries failed
-    console.error('All OpenAI attempts failed. Last error:', lastError);
-    throw new Error(
-      lastError?.message ||
-        'Failed to generate response after multiple attempts'
-    );
+    // Only throw the error after all retries are exhausted
+    if (lastError) {
+      const errorMessage = lastError.status
+        ? `OpenAI request failed with status ${lastError.status}`
+        : 'Failed to generate response after multiple attempts';
+      throw new Error(errorMessage);
+    }
+
+    throw new Error('Failed to generate response after multiple attempts');
   }
 
   /**
@@ -127,7 +162,8 @@ class OpenAIService {
         }
       );
     } catch (error) {
-      console.error('Error generating response with schema:', error);
+      // Only log the error, don't expose details
+      console.debug('Error generating response with schema:', error);
       throw error;
     }
   }
@@ -151,7 +187,7 @@ class OpenAIService {
         },
       ]);
     } catch (error) {
-      console.error('Error generating custom response:', error);
+      console.debug('Error generating custom response:', error);
       return 'Unable to generate response at this time.';
     }
   }
@@ -178,7 +214,7 @@ Answer: ${answer}`;
         },
       ]);
     } catch (error) {
-      console.error('Error generating insight:', error);
+      console.debug('Error generating insight:', error);
       return 'Unable to generate insight at this time.';
     }
   }
@@ -201,7 +237,7 @@ Context: ${context}`;
         },
       ]);
     } catch (error) {
-      console.error('Error generating todo suggestion:', error);
+      console.debug('Error generating todo suggestion:', error);
       return 'Unable to generate suggestion at this time.';
     }
   }
