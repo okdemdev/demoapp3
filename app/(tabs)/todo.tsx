@@ -525,27 +525,7 @@ export default function TodoScreen() {
         </View>
       </View>
 
-      {/* Debug button - only visible in development */}
-      <TouchableOpacity
-        style={styles.debugButton}
-        onPress={() => {
-          console.log('📊 Current tasks:', tasks);
-          console.log('📈 Current metrics:', userData?.metrics);
-          console.log('🔄 Before stats:', beforeStats);
-          console.log('🔄 After stats:', afterStats);
 
-          // Force complete the first incomplete task if any exists
-          const incompleteTask = tasks.find(t => !t.completed && !t.skipped);
-          if (incompleteTask) {
-            console.log('🔶 Force completing task:', incompleteTask.id);
-            completeTask(incompleteTask.id);
-          } else {
-            console.log('❌ No incomplete tasks found');
-          }
-        }}
-      >
-        <Text style={styles.debugButtonText}>Debug</Text>
-      </TouchableOpacity>
 
       {/* Task Cards */}
       <ScrollView style={styles.tasksContainer}>
@@ -911,16 +891,5 @@ const styles = StyleSheet.create({
     color: '#ccc',
     opacity: 0.9,
   },
-  debugButton: {
-    backgroundColor: '#ff5722',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 4,
-    alignSelf: 'center',
-    marginBottom: 10,
-  },
-  debugButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
+
 });
