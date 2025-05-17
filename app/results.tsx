@@ -3,7 +3,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGlobal } from './lib/context/GlobalContext';
-import quizQuestions from './lib/quizQuestions';
+import { HabitsQuestion, habitsQuestions } from './lib/habitsQuestions';
+import quizQuestions, { QuizQuestion } from './lib/quizQuestions';
 
 export default function ResultsScreen() {
   const router = useRouter();
@@ -18,14 +19,80 @@ export default function ResultsScreen() {
   const getAnswerText = (answer: {
     questionId: number;
     answer: string | number;
-  }) => {
-    const question = quizQuestions.find((q) => q.id === answer.questionId);
+  }, isHabit: boolean = false) => {
+    if (isHabit) {
+      const question = habitsQuestions.find(
+        (q) => q.id === answer.questionId
+      ) as HabitsQuestion | undefined;
+
+      if (!question) return '';
+
+      // Handle habits answers which use slider with discrete labels
+      const sliderIndex = Number(answer.answer) - 1;
+      const labels = question.sliderOptions?.labels || [];
+      return labels[sliderIndex] || answer.answer.toString();
+    } else {
+      const question = quizQuestions.find(
+        (q) => q.id === answer.questionId
+      ) as QuizQuestion | undefined;
+
+      if (!question) return '';
+
+      if (question.type === 'scale') {
+        return `${answer.answer}/10`;
+      }
+      return answer.answer.toString();
+    }
+  };
+
+  const getHabitSuggestion = (
+    questionId: number,
+    answer: { answer: string | number }
+  ) => {
+    // Convert to number since habits answers are slider indices
+    const score = Number(answer.answer);
+    const question = habitsQuestions.find(
+      (q) => q.id === questionId
+    ) as HabitsQuestion | undefined;
+
     if (!question) return '';
 
-    if (question.type === 'scale') {
-      return `${answer.answer}/10`;
+    switch (questionId) {
+      case 1: // Wake up time
+        if (score >= 4) return "Try going to bed 15 minutes earlier each night until you reach your target wake-up time.";
+        return "Maintain your early morning routine for optimal productivity.";
+
+      case 2: // Running
+        if (score <= 2) return "Consider starting with short walks, then progress to jogging for better cardiovascular health.";
+        return "Great job with running! Try varying your routes to keep it interesting.";
+
+      case 3: // Gym
+        if (score <= 2) return "Start with 2 days a week at the gym focusing on full-body workouts.";
+        return "Excellent gym routine! Make sure to include proper recovery periods.";
+
+      case 4: // Sit-ups
+        if (score <= 2) return "Begin with 3 sets of as many sit-ups as you can do. Gradually increase the count each week.";
+        return "Great core strength! Try adding variations like bicycle crunches to your routine.";
+
+      case 5: // Push-ups
+        if (score <= 2) return "Start with modified push-ups on your knees if needed, aiming for 3 sets of 5-10 repetitions.";
+        return "Excellent upper body strength! Consider adding diamond push-ups for tricep engagement.";
+
+      case 6: // Water
+        if (score <= 3) return "Keep a water bottle with you and set reminders to drink throughout the day.";
+        return "Great hydration habits! Try infusing water with fruits for variety.";
+
+      case 7: // Screentime limit
+        if (score >= 4) return "Try to reduce screen time by setting app limits and taking regular breaks every hour.";
+        return "You have healthy screen time habits. Continue being mindful of your digital consumption.";
+
+      case 8: // Cold shower
+        if (score <= 2) return "Consider starting with 30 seconds of cold water at the end of your regular shower, gradually increasing duration.";
+        return "Great discipline with cold showers! Continue this practice for improved circulation and mental resilience.";
+
+      default:
+        return '';
     }
-    return answer.answer.toString();
   };
 
   const getInsight = (
@@ -107,22 +174,54 @@ export default function ResultsScreen() {
         <Text style={styles.title}>Your Assessment Results</Text>
         <Text style={styles.subtitle}>Here's what we've learned about you</Text>
 
+        {/* Quiz results */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Mindset Assessment</Text>
+        </View>
+
         {userData.quiz.answers.map((answer) => {
           const question = quizQuestions.find(
             (q) => q.id === answer.questionId
-          );
+          ) as QuizQuestion | undefined;
+
           if (!question) return null;
 
           const insight = getInsight(question.id, answer);
           if (!insight) return null;
 
           return (
-            <View key={answer.questionId} style={styles.resultCard}>
+            <View key={`quiz-${answer.questionId}`} style={styles.resultCard}>
               <Text style={styles.question}>{question.question}</Text>
               <Text style={styles.answer}>
                 Your answer: {getAnswerText(answer)}
               </Text>
               <Text style={styles.insight}>{insight}</Text>
+            </View>
+          );
+        })}
+
+        {/* Habits results */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Habits Assessment</Text>
+        </View>
+
+        {userData.habits?.answers.map((answer) => {
+          const question = habitsQuestions.find(
+            (q) => q.id === answer.questionId
+          ) as HabitsQuestion | undefined;
+
+          if (!question) return null;
+
+          const suggestion = getHabitSuggestion(question.id, answer);
+          if (!suggestion) return null;
+
+          return (
+            <View key={`habits-${answer.questionId}`} style={styles.resultCard}>
+              <Text style={styles.question}>{question.question}</Text>
+              <Text style={styles.answer}>
+                Your answer: {getAnswerText(answer, true)}
+              </Text>
+              <Text style={styles.insight}>{suggestion}</Text>
             </View>
           );
         })}
@@ -171,6 +270,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 30,
     opacity: 0.8,
+  },
+  sectionHeader: {
+    marginTop: 20,
+    marginBottom: 15,
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 5,
   },
   resultCard: {
     backgroundColor: '#2a2a2a',

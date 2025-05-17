@@ -87,7 +87,7 @@ export default function OnboardingScreen() {
                                 animated: true
                             });
                         } else {
-                            // Navigate to results on the last slide
+                            // Navigate to habits quiz after onboarding
                             router.push('/results');
                         }
                     }}
