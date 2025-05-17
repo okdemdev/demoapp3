@@ -1,7 +1,7 @@
 import Slider from '@react-native-community/slider';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import NoteIcon from '../assets/note-icon';
 import quizQuestions from '../lib/quizQuestions';
 import { getQuizData, saveQuizAnswer } from '../lib/quizStorage';
 
@@ -23,9 +24,17 @@ export default function QuizScreen() {
   const [answer, setAnswer] = useState<string | number>('');
   const [isLoading, setIsLoading] = useState(true);
 
+  // Check if we're on the intro page (id=0)
+  const isIntroPage = questionId === 0;
+
   useEffect(() => {
-    loadPreviousAnswer();
-  }, []);
+    // Skip loading previous answer on intro page
+    if (!isIntroPage) {
+      loadPreviousAnswer();
+    } else {
+      setIsLoading(false);
+    }
+  }, [isIntroPage]);
 
   const loadPreviousAnswer = async () => {
     const quizData = await getQuizData();
@@ -40,7 +49,7 @@ export default function QuizScreen() {
     setIsLoading(false);
   };
 
-  if (!question || isLoading) {
+  if (!question && !isIntroPage || isLoading) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <Text style={styles.loadingText}>Loading...</Text>
@@ -49,6 +58,12 @@ export default function QuizScreen() {
   }
 
   const handleNext = async () => {
+    if (isIntroPage) {
+      // If on intro page, just move to the first question
+      router.push('/quiz/1');
+      return;
+    }
+
     if (answer !== '') {
       await saveQuizAnswer(questionId, answer);
       if (questionId < quizQuestions.length) {
@@ -59,8 +74,29 @@ export default function QuizScreen() {
     }
   };
 
+  // Render intro page content
+  const renderIntroPage = () => {
+    return (
+      <View style={styles.introContainer}>
+        <Text style={styles.introTitle}>
+          Let's start by understanding more about your situation.
+        </Text>
+
+        <NoteIcon width={80} height={80} />
+
+        <Text style={styles.introText}>
+          Answer all questions honestly.
+        </Text>
+
+        <Text style={styles.introText}>
+          We will use the answers to design a tailor-made life reset program for you.
+        </Text>
+      </View>
+    );
+  };
+
   const renderQuestionInput = () => {
-    switch (question.type) {
+    switch (question?.type) {
       case 'scale':
         return (
           <View style={styles.scaleContainer}>
@@ -128,27 +164,59 @@ export default function QuizScreen() {
     }
   };
 
+  // Calculate progress percentage for the progress bar
+  const calculateProgress = () => {
+    if (isIntroPage) return 0;
+    return (questionId / quizQuestions.length) * 100;
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="light" />
+
+      {/* Progress Bar */}
+      <View style={styles.progressBarContainer}>
+        <View
+          style={[
+            styles.progressBar,
+            { width: `${calculateProgress()}%` }
+          ]}
+        />
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
       >
-        <Text style={styles.progress}>
-          Question {questionId} of {quizQuestions.length}
-        </Text>
-        <Text style={styles.question}>{question.question}</Text>
-        {renderQuestionInput()}
+        {isIntroPage ? (
+          renderIntroPage()
+        ) : (
+          <>
+            <Text style={styles.progress}>
+              Question {questionId} of {quizQuestions.length}
+            </Text>
+            <Text style={styles.question}>{question?.question}</Text>
+            {renderQuestionInput()}
+          </>
+        )}
       </ScrollView>
+
       <View style={[styles.footer, { paddingBottom: insets.bottom }]}>
         <Pressable
-          style={[styles.nextButton, !answer && styles.nextButtonDisabled]}
+          style={[
+            styles.nextButton,
+            isIntroPage ? {} : (!answer && styles.nextButtonDisabled)
+          ]}
           onPress={handleNext}
-          disabled={!answer}
+          disabled={!isIntroPage && !answer}
         >
           <Text style={styles.nextButtonText}>
-            {questionId === quizQuestions.length ? 'Finish' : 'Next'}
+            {isIntroPage
+              ? 'Got it'
+              : questionId === quizQuestions.length
+                ? 'Finish'
+                : 'Next'
+            }
           </Text>
         </Pressable>
       </View>
@@ -161,11 +229,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1a1a1a',
   },
+  progressBarContainer: {
+    height: 4,
+    backgroundColor: '#2a2a2a',
+    width: '100%',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#ff7300',
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 20,
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   loadingText: {
     color: '#ffffff',
@@ -183,6 +262,24 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     marginBottom: 30,
+  },
+  introContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  introTitle: {
+    color: '#ffffff',
+    fontSize: 32,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 60,
+  },
+  introText: {
+    color: '#ffffff',
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 20,
   },
   scaleContainer: {
     alignItems: 'center',
@@ -248,7 +345,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#2a2a2a',
   },
   nextButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#ff7300',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',

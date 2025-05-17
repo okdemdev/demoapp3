@@ -123,9 +123,9 @@ export default function WelcomeScreen() {
         setCurrentScreen(prevScreen => prevScreen + 1);
       }, 300); // Wait for fade out before changing screen
     } else {
-      // Navigate to quiz page
+      // Navigate to quiz page - start with intro page
       console.log('Navigating to quiz');
-      router.push('/quiz/1');
+      router.push('/quiz/0');
     }
   };
 
