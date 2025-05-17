@@ -26,7 +26,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="todo"
         options={{
-          title: 'ToDo',
+          title: 'To-Do',
           tabBarIcon: ({ color }) => (
             <FontAwesome name="list" size={24} color={color} />
           ),
@@ -35,7 +35,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="statistics"
         options={{
-          title: 'Stats',
+          title: 'Statistics',
           tabBarIcon: ({ color }) => (
             <FontAwesome name="bar-chart" size={24} color={color} />
           ),
