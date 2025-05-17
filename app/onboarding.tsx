@@ -50,7 +50,7 @@ const SLIDES = [
     {
         id: '2',
         title: 'Motivation doesn\'t last',
-        description: 'A system does. Rise creates a focused environment for you to overcome distraction and challenges, to rebuild your life.',
+        description: 'A system does. Goose Peker creates a focused environment for you to overcome distraction and challenges, to rebuild your life.',
         background: '#D32F2F', // Bright red
         illustration: PlanningIllustration
     },

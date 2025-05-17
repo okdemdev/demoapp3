@@ -80,14 +80,14 @@ export const quizQuestions: QuizQuestion[] = [
       emoji: '🙌',
       title: "After 66 days, you'll overcome the setback.",
       text: [
-        'The average Rise male members between 13 to 17 years old showed',
+        'The average male members between 13 to 17 years old showed',
         '315% improvement in physical, mental well-being and focus',
-        'after joining Rise.',
+        'after joining us.',
       ],
       testimonial: {
         name: 'Liam',
         age: 16,
-        text: "Rise has been a game-changer for me. It's helped me stay focused on my goals and build better habits, even with school and sports. I feel more confident and organized every day.",
+        text: "Goose Peker has been a game-changer for me. It's helped me stay focused on my goals and build better habits, even with school and sports. I feel more confident and organized every day.",
       },
     },
   },
