@@ -74,3 +74,5 @@ export const quizQuestions: QuizQuestion[] = [
     },
   },
 ];
+
+export default quizQuestions;

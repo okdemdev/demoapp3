@@ -11,8 +11,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { quizQuestions } from '../data/quizQuestions';
-import { getQuizData, saveQuizAnswer } from '../utils/quizStorage';
+import quizQuestions from '../lib/quizQuestions';
+import { getQuizData, saveQuizAnswer } from '../lib/quizStorage';
 
 export default function QuizScreen() {
   const { id } = useLocalSearchParams();

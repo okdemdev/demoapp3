@@ -73,3 +73,12 @@ export const clearQuizData = async () => {
     return false;
   }
 };
+
+const quizStorage = {
+  saveQuizAnswer,
+  getQuizData,
+  markQuizCompleted,
+  clearQuizData,
+};
+
+export default quizStorage;
