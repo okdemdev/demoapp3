@@ -1,4 +1,3 @@
-import NetInfo from '@react-native-community/netinfo';
 import Constants from 'expo-constants';
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
@@ -44,18 +43,6 @@ class OpenAIService {
     return OpenAIService.instance;
   }
 
-  // Check if network is available
-  private async checkNetworkConnectivity(): Promise<boolean> {
-    try {
-      // Use NetInfo to check network connectivity
-      const state = await NetInfo.fetch();
-      return state.isConnected === true && state.isInternetReachable === true;
-    } catch (error) {
-      console.error('Error checking network connectivity:', error);
-      return false;
-    }
-  }
-
   /**
    * Generate a response with simplified retry logic
    */
@@ -63,14 +50,8 @@ class OpenAIService {
     messages: ChatCompletionMessageParam[],
     options: RetryOptions = {}
   ): Promise<T> {
-    const { maxRetries = 2, zodSchema } = options;
+    const { maxRetries = 5, zodSchema } = options;
     let lastError: Error | null = null;
-
-    // Check network connectivity before attempting API call
-    const isConnected = await this.checkNetworkConnectivity();
-    if (!isConnected) {
-      throw new Error('No internet connection available');
-    }
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
@@ -103,26 +84,9 @@ class OpenAIService {
       } catch (error) {
         lastError = error as Error;
 
-        // Check if it's a network error
-        const isNetworkError =
-          error instanceof Error &&
-          (error.message.includes('network') ||
-            error.message.includes('connection') ||
-            error.message.includes('timeout'));
-
-        // Only retry for network-related errors after checking connectivity again
-        if (attempt < maxRetries - 1 && isNetworkError) {
-          // Check connectivity again
-          const isConnected = await this.checkNetworkConnectivity();
-          if (!isConnected) {
-            throw new Error('Network connection lost');
-          }
-
-          const delay = 1500 * (attempt + 1); // Longer delay for network issues
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        } else if (attempt < maxRetries - 1) {
-          // Regular backoff for other errors
-          const delay = 1000 * (attempt + 1);
+        if (attempt < maxRetries - 1) {
+          // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+          const delay = Math.pow(2, attempt) * 1000;
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
@@ -143,15 +107,9 @@ class OpenAIService {
     prompt: string,
     systemMessage: string,
     zodSchema: z.ZodType<T>,
-    maxRetries: number = 2
+    maxRetries: number = 5
   ): Promise<T> {
     try {
-      // First check connectivity
-      const isConnected = await this.checkNetworkConnectivity();
-      if (!isConnected) {
-        throw new Error('No internet connection available');
-      }
-
       return await this.generateWithRetry<T>(
         [
           {

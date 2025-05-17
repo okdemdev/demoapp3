@@ -48,11 +48,11 @@ function buildContextString(answers: QuizAnswer[]): string {
 
 async function getMetricScore(
   metric: MetricKey,
-  context: string
+  context: string,
+  answers: QuizAnswer[]
 ): Promise<number> {
   const openai = OpenAIService.getInstance();
 
-  // Create scoring guidelines based on the metric
   const scoringCriteria = getScoringCriteria(metric);
 
   const prompt = `
@@ -70,20 +70,17 @@ RESPONSE FORMAT: Single integer between 0-100 only.
 `.trim();
 
   try {
-    // Try to get a score from OpenAI
     const score = await openai.generateWithZodSchema<number>(
       prompt,
       'You are a scoring algorithm that outputs only a single integer between 0 and 100.',
       scoreSchema,
-      2 // Reduced retries
+      5 // Use 5 retries with exponential backoff
     );
 
-    // Ensure the score is a valid number between 0-100
     return Math.min(100, Math.max(0, Math.round(score)));
   } catch (error) {
     console.error(`Error generating score for ${metric}:`, error);
-    // Return a fallback score
-    return 50;
+    return calculateFallbackScore(metric, answers);
   }
 }
 
@@ -181,8 +178,6 @@ async function computeMetrics(
   answers: QuizAnswer[]
 ): Promise<Record<MetricKey, number>> {
   console.log('Starting metrics computation...');
-
-  // Build context from answers
   const context = buildContextString(answers);
 
   const metrics: Record<MetricKey, number> = {
@@ -193,40 +188,19 @@ async function computeMetrics(
     discipline: 0,
   };
 
-  // Track if we're having consistent API failures
-  let apiFailureCount = 0;
-  const maxFailuresBeforeFallback = 2;
-  let useFallback = false;
-
-  // Process metrics one at a time to avoid rate limits
+  // Process metrics sequentially to avoid rate limits
   const metricKeys = Object.keys(METRIC_DESCRIPTIONS) as MetricKey[];
 
   for (const metric of metricKeys) {
-    // If we've had too many failures, use fallback scoring instead
-    if (useFallback) {
-      metrics[metric] = calculateFallbackScore(metric, answers);
-      continue;
-    }
-
     try {
-      const score = await getMetricScore(metric, context);
+      const score = await getMetricScore(metric, context, answers);
       metrics[metric] = score;
-      // Reset failure count on success
-      apiFailureCount = 0;
     } catch (error) {
-      console.error(`Failed to get score for ${metric}:`, error);
-      apiFailureCount++;
-
-      // Switch to fallback if we've had too many failures
-      if (apiFailureCount >= maxFailuresBeforeFallback) {
-        console.log('Too many API failures, switching to fallback scoring');
-        useFallback = true;
-        // Calculate this metric with fallback
-        metrics[metric] = calculateFallbackScore(metric, answers);
-      } else {
-        // Still use the default fallback for this metric
-        metrics[metric] = 50;
-      }
+      console.error(
+        `Failed to get score for ${metric}, using fallback:`,
+        error
+      );
+      metrics[metric] = calculateFallbackScore(metric, answers);
     }
   }
 
