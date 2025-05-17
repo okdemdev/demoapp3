@@ -352,7 +352,8 @@ type LoadingStep = {
 export default function ResultsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { userData, isLoading, updateSubscription } = useGlobal();
+  const { userData, isLoading, updateSubscription, updateMetrics } =
+    useGlobal();
   const [metrics, setMetrics] = useState<Record<MetricKey, number> | null>(
     null
   );
@@ -377,6 +378,12 @@ export default function ResultsScreen() {
     },
   ];
 
+  // Function to check if metrics are stale (older than 24 hours)
+  const areMetricsStale = (lastUpdate: number) => {
+    const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    return Date.now() - lastUpdate > twentyFourHours;
+  };
+
   // Define calculate function for retry button
   const calculate = async () => {
     if (!userData?.quiz?.answers) {
@@ -398,6 +405,9 @@ export default function ResultsScreen() {
         userData.habits?.answers || []
       );
       console.timeEnd('Metrics calculation (retry)');
+
+      // Save metrics to global context and storage
+      await updateMetrics(m);
       setMetrics(m);
     } catch (err) {
       console.error('❌ Error calculating metrics on retry:', err);
@@ -457,6 +467,17 @@ export default function ResultsScreen() {
         return;
       }
 
+      // Check if we have cached metrics that aren't stale
+      if (
+        userData.metrics &&
+        userData.lastMetricsUpdate &&
+        !areMetricsStale(userData.lastMetricsUpdate)
+      ) {
+        console.log('📊 Using cached metrics');
+        setMetrics(userData.metrics);
+        return;
+      }
+
       console.log('🔄 Starting metrics calculation in useEffect');
       setCurrentStep(0); // Start with the first loading step
       setError(null);
@@ -476,6 +497,8 @@ export default function ResultsScreen() {
           throw new Error('Failed to compute metrics - no data returned');
         }
 
+        // Save metrics to global context and storage
+        await updateMetrics(m);
         console.log('📊 Setting metrics state with calculated values');
         setMetrics(m);
       } catch (err) {
