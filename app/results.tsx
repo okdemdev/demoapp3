@@ -1,7 +1,8 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 import { useGlobal } from './lib/context/GlobalContext';
@@ -16,6 +17,14 @@ function clamp(val: number, min: number, max: number): number {
 }
 
 type MetricKey = 'wisdom' | 'strength' | 'focus' | 'confidence' | 'discipline';
+
+const METRIC_ICONS: Record<MetricKey, string> = {
+  wisdom: 'brain-outline',
+  strength: 'barbell-outline',
+  focus: 'eye-outline',
+  confidence: 'sunny-outline',
+  discipline: 'lock-closed-outline',
+};
 
 const METRIC_DESCRIPTIONS: Record<MetricKey, string> = {
   wisdom:
@@ -38,10 +47,7 @@ const scoreSchema = z.preprocess((val) => {
 }, z.number().min(0).max(100).int()) as z.ZodType<number>;
 
 // Build context string with both quiz and habits answers
-function buildContextString(
-  quizAnswers: QuizAnswer[],
-  habitsAnswers: HabitsAnswer[]
-): string {
+function buildContextString(quizAnswers: QuizAnswer[], habitsAnswers: HabitsAnswer[]): string {
   const quizContext = quizQuestions
     .filter((q) => q.type !== 'message')
     .map((q) => {
@@ -53,18 +59,13 @@ function buildContextString(
 
   const habitsContext = habitsQuestions
     .map((q) => {
-      const userAnswer = habitsAnswers.find(
-        (a) => a.questionId === q.id
-      )?.answer;
+      const userAnswer = habitsAnswers.find((a) => a.questionId === q.id)?.answer;
 
       // Get the label for slider answers instead of just the number
       let displayAnswer = '[No answer]';
       if (userAnswer !== undefined) {
         if (typeof userAnswer === 'number' && q.sliderOptions?.labels) {
-          const index = Math.max(
-            0,
-            Math.min(q.sliderOptions.labels.length - 1, userAnswer - 1)
-          );
+          const index = Math.max(0, Math.min(q.sliderOptions.labels.length - 1, userAnswer - 1));
           displayAnswer = q.sliderOptions.labels[index];
         } else {
           displayAnswer = String(userAnswer);
@@ -200,11 +201,11 @@ function calculateFallbackScore(
 
   // Habit weights for each metric
   const habitWeights: Record<MetricKey, Record<number, number>> = {
-    wisdom: { 1: 1, 7: 2 }, // Wake up time, screen time
-    strength: { 2: 3, 3: 3, 4: 2, 5: 2, 6: 2, 8: 1 }, // Exercise, gym, sit-ups, push-ups, water, cold showers
-    focus: { 1: 1, 7: 3 }, // Wake up time, screen time
-    confidence: { 2: 1, 3: 1, 4: 1, 5: 1 }, // Exercise habits can affect confidence
-    discipline: { 1: 3, 2: 2, 3: 2, 6: 1, 8: 3 }, // Wake up, exercise, gym, water, cold showers
+    wisdom: { 1: 1, 7: 2 },  // Wake up time, screen time
+    strength: { 2: 3, 3: 3, 4: 2, 5: 2, 6: 2, 8: 1 },  // Exercise, gym, sit-ups, push-ups, water, cold showers
+    focus: { 1: 1, 7: 3 },  // Wake up time, screen time
+    confidence: { 2: 1, 3: 1, 4: 1, 5: 1 },  // Exercise habits can affect confidence
+    discipline: { 1: 3, 2: 2, 3: 2, 6: 1, 8: 3 },  // Wake up, exercise, gym, water, cold showers
   };
 
   // Add habits component to the score
@@ -224,7 +225,7 @@ function calculateFallbackScore(
       // For most habits, like exercise, lower numbers are worse (e.g., "I don't run")
       if ([2, 3, 4, 5, 6, 8].includes(questionId)) {
         // Convert 1-5 scale to 0-4 scale
-        answerValue = answer.answer - 1;
+        answerValue = (answer.answer - 1);
       }
       // For wake up time, lower is better (waking up earlier)
       else if (questionId === 1) {
@@ -271,39 +272,58 @@ async function computeMetrics(
 
   for (const metric of metricKeys) {
     try {
-      const score = await getMetricScore(
-        metric,
-        context,
-        quizAnswers,
-        habitsAnswers
-      );
+      const score = await getMetricScore(metric, context, quizAnswers, habitsAnswers);
       metrics[metric] = score;
     } catch (error) {
       console.error(
         `Failed to get score for ${metric}, using fallback:`,
         error
       );
-      metrics[metric] = calculateFallbackScore(
-        metric,
-        quizAnswers,
-        habitsAnswers
-      );
+      metrics[metric] = calculateFallbackScore(metric, quizAnswers, habitsAnswers);
     }
   }
 
   return metrics;
 }
 
+// Sun logo component
+const SunLogo = () => (
+  <View style={styles.logoContainer}>
+    <View style={styles.sunLogo} />
+  </View>
+);
+
+// Progress bar component
+const ProgressBar = ({ progress }: { progress: number }) => (
+  <View style={styles.progressBarContainer}>
+    <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+  </View>
+);
+
+// Loading step component
+type LoadingStep = {
+  title: string;
+  steps: string[];
+  progress: number;
+};
+
 export default function ResultsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { userData, isLoading, updateMetrics, updateSubscription } =
-    useGlobal();
-  const [metrics, setMetrics] = useState<Record<MetricKey, number> | null>(
-    null
-  );
-  const [loadingMetrics, setLoadingMetrics] = useState(true);
+  const { userData, isLoading, updateSubscription } = useGlobal();
+  const [metrics, setMetrics] = useState<Record<MetricKey, number> | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Animation values
+  const [progressAnim] = useState(new Animated.Value(0));
+  const [currentStep, setCurrentStep] = useState(0);
+
+  // Define the sequence of loading steps
+  const loadingSteps: LoadingStep[] = [
+    { title: "Analysing your current habits...", steps: [], progress: 0.5 },
+    { title: "Customising a program...", steps: ["Analysing current habits"], progress: 0.7 },
+    { title: "Customising a program...", steps: ["Analysing current habits", "Generating 66 days schedule"], progress: 0.9 },
+  ];
 
   // Define calculate function for retry button
   const calculate = async () => {
@@ -313,8 +333,11 @@ export default function ResultsScreen() {
     }
 
     console.log('🔄 Manual retry of metrics calculation');
-    setLoadingMetrics(true);
+    setCurrentStep(0); // Reset to first loading step
     setError(null);
+
+    // Animate through loading steps
+    animateLoadingSequence();
 
     try {
       console.time('Metrics calculation (retry)');
@@ -323,37 +346,52 @@ export default function ResultsScreen() {
         userData.habits?.answers || []
       );
       console.timeEnd('Metrics calculation (retry)');
-
-      // Store metrics in global context and local storage
-      await updateMetrics(m);
       setMetrics(m);
     } catch (err) {
       console.error('❌ Error calculating metrics on retry:', err);
       setError('Failed to calculate your metrics. Please try again later.');
-    } finally {
-      setLoadingMetrics(false);
     }
+  };
+
+  // Function to animate through the loading steps
+  const animateLoadingSequence = () => {
+    // Reset progress
+    progressAnim.setValue(0);
+
+    // Animate through each step
+    loadingSteps.forEach((_, index) => {
+      const delay = index * 1500; // 1.5 seconds per step
+
+      // Animate progress bar
+      Animated.timing(progressAnim, {
+        toValue: loadingSteps[index].progress,
+        duration: 1000,
+        delay: delay,
+        useNativeDriver: false,
+        easing: Easing.out(Easing.ease),
+      }).start();
+
+      // Update current step
+      setTimeout(() => {
+        setCurrentStep(index);
+      }, delay);
+    });
+
+    // After the last step, wait a bit before showing results
+    setTimeout(() => {
+      // The component will show results after this
+    }, loadingSteps.length * 1500 + 500);
   };
 
   useEffect(() => {
     async function calculateInitial() {
       if (userData?.quiz?.answers) {
         console.log('🔄 Starting metrics calculation in useEffect');
-        setLoadingMetrics(true);
+        setCurrentStep(0); // Start with the first loading step
         setError(null);
 
-        // Check if we have recent cached metrics (less than 24 hours old)
-        const hasRecentMetrics =
-          userData.metrics &&
-          userData.lastMetricsUpdate &&
-          Date.now() - userData.lastMetricsUpdate < 24 * 60 * 60 * 1000;
-
-        if (hasRecentMetrics && userData.metrics) {
-          console.log('📊 Using cached metrics');
-          setMetrics(userData.metrics);
-          setLoadingMetrics(false);
-          return;
-        }
+        // Animate through loading steps
+        animateLoadingSequence();
 
         try {
           console.time('Metrics calculation');
@@ -363,19 +401,15 @@ export default function ResultsScreen() {
           );
           console.timeEnd('Metrics calculation');
 
-          // Store metrics in global context and local storage
-          await updateMetrics(m);
+          console.log('📊 Setting metrics state with calculated values');
           setMetrics(m);
         } catch (err) {
           console.error('❌ Error calculating metrics:', err);
           setError('Failed to calculate your metrics. Please try again.');
-        } finally {
-          setLoadingMetrics(false);
         }
       } else {
         console.warn('⚠️ No quiz answers available in userData');
         setError('No quiz data found. Please complete the quiz first.');
-        setLoadingMetrics(false);
       }
     }
     calculateInitial();
@@ -389,20 +423,12 @@ export default function ResultsScreen() {
   if (isLoading || !userData) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <Text style={styles.loadingText}>Loading your assessment data...</Text>
-      </View>
-    );
-  }
-
-  if (loadingMetrics) {
-    return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <Text style={styles.loadingText}>
-          Computing your personalized scores...
-        </Text>
-        <Text style={styles.loadingSubtext}>
-          This may take a moment as we analyze your responses.
-        </Text>
+        <StatusBar style="light" />
+        <View style={styles.loadingContent}>
+          <SunLogo />
+          <Text style={styles.loadingText}>Loading your assessment data...</Text>
+          <ProgressBar progress={0.3} />
+        </View>
       </View>
     );
   }
@@ -410,6 +436,7 @@ export default function ResultsScreen() {
   if (error) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
+        <StatusBar style="light" />
         <Text style={styles.errorText}>{error}</Text>
         <Pressable style={styles.retryButton} onPress={calculate}>
           <Text style={styles.retryButtonText}>Try Again</Text>
@@ -418,148 +445,227 @@ export default function ResultsScreen() {
     );
   }
 
-  // Check if habits data is available
-  const hasHabitsData =
-    userData.habits &&
-    userData.habits.answers &&
-    userData.habits.answers.length > 0;
+  // Show loading screens sequence
+  if (!metrics || currentStep < loadingSteps.length - 1) {
+    const step = loadingSteps[currentStep];
 
-  return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="light" />
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <Text style={styles.title}>Your Assessment Results</Text>
-        <Text style={styles.subtitle}>
-          {hasHabitsData
-            ? 'Here are your key life metrics based on your quiz and habits assessment'
-            : 'Here are your key life metrics based on your quiz'}
-        </Text>
-        <View style={{ marginBottom: 30 }}>
-          {metrics &&
-            Object.entries(metrics).map(([key, value]) => (
-              <View key={key} style={styles.resultCard}>
-                <Text style={styles.question}>
-                  {key.charAt(0).toUpperCase() + key.slice(1)}
-                </Text>
-                <Text style={styles.answer}>
-                  {Math.round(Number(value))} / 100
-                </Text>
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <StatusBar style="light" />
+        <View style={styles.loadingContent}>
+          <SunLogo />
+          <Text style={styles.loadingTitle}>{step.title}</Text>
+
+          <Animated.View style={styles.progressBarContainer}>
+            <Animated.View
+              style={[
+                styles.progressBar,
+                {
+                  width: progressAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0%', '100%']
+                  })
+                }
+              ]}
+            />
+          </Animated.View>
+
+          {step.steps.map((stepText, index) => (
+            <View key={index} style={styles.stepItem}>
+              <Ionicons name="checkmark-outline" size={18} color="#888" />
+              <Text style={styles.stepText}>{stepText}</Text>
+            </View>
+          ))}
+
+          <View style={styles.statsContainer}>
+            <View style={styles.statWrapper}>
+              <Text style={styles.statText}>400,000+ installs</Text>
+              <View style={styles.ratingContainer}>
+                {[1, 2, 3, 4, 5].map(star => (
+                  <Ionicons key={star} name="star" size={16} color="#e5e5e5" />
+                ))}
+                <Text style={styles.ratingText}>4.6</Text>
               </View>
-            ))}
+            </View>
+
+            <View style={styles.statWrapper}>
+              <Text style={styles.statText}>450,000+</Text>
+              <Text style={styles.statText}>Program Generated</Text>
+            </View>
+          </View>
         </View>
-        <View style={styles.ctaContainer}>
-          <Text style={styles.ctaTitle}>Ready to start your journey?</Text>
-          <Text style={styles.ctaText}>
-            Get personalized guidance and a custom plan to improve your
-            well-being
-          </Text>
-          <Pressable style={styles.ctaButton} onPress={handleSubscribe}>
-            <Text style={styles.ctaButtonText}>Subscribe Now</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
-  );
+      </View>
+    );
+  }
+
+  // Final results display with new design
+  if (metrics) {
+    // Calculate overall score as average of all metrics
+    const overallScore = Math.round(
+      Object.values(metrics).reduce((sum, value) => sum + value, 0) / Object.keys(metrics).length
+    );
+
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <StatusBar style="light" />
+        <ScrollView style={styles.scrollView}>
+          <View style={styles.resultsContainer}>
+            <Text style={styles.resultsTitle}>Your Rise Rating</Text>
+            <Text style={styles.resultsSubtitle}>
+              Based on your answers, this is your current Rise rating, which reflects your lifestyle and habits now.
+            </Text>
+
+            {/* Overall score card */}
+            <View style={[styles.scoreCard, { backgroundColor: '#BB4430' }]}>
+              <View style={styles.scoreHeader}>
+                <Ionicons name="star" size={24} color="#fff" />
+                <Text style={styles.scoreLabel}>Overall</Text>
+              </View>
+              <Text style={styles.scoreValue}>{overallScore}</Text>
+              <View style={styles.scoreBarContainer}>
+                <View
+                  style={[
+                    styles.scoreBar,
+                    { width: `${Math.min(100, overallScore)}%` }
+                  ]}
+                />
+              </View>
+            </View>
+
+            {/* Individual metrics cards */}
+            <View style={styles.metricsGrid}>
+              {Object.entries(metrics).map(([key, value]) => (
+                <View key={key} style={styles.scoreCard}>
+                  <View style={styles.scoreHeader}>
+                    <Ionicons
+                      name={METRIC_ICONS[key as MetricKey] as any}
+                      size={24}
+                      color="#000"
+                    />
+                    <Text style={[styles.scoreLabel, { color: '#000' }]}>
+                      {key.charAt(0).toUpperCase() + key.slice(1)}
+                    </Text>
+                  </View>
+                  <Text style={[styles.scoreValue, { color: '#000' }]}>{Math.round(value)}</Text>
+                  <View style={[styles.scoreBarContainer, { backgroundColor: '#E5E5E5' }]}>
+                    <View
+                      style={[
+                        styles.scoreBar,
+                        {
+                          width: `${Math.min(100, value)}%`,
+                          backgroundColor: '#BB4430'
+                        }
+                      ]}
+                    />
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            <Pressable style={styles.ctaButton} onPress={handleSubscribe}>
+              <Text style={styles.ctaButtonText}>Start Your Reset Program</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // This should never happen, but just in case
+  return null;
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#111',
   },
   scrollView: {
     flex: 1,
   },
-  scrollContent: {
-    padding: 20,
+  loadingContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  logoContainer: {
+    width: 60,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  sunLogo: {
+    width: 60,
+    height: 30,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+  },
+  loadingTitle: {
+    fontSize: 24,
+    color: '#fff',
+    marginBottom: 24,
+    textAlign: 'center',
   },
   loadingText: {
-    color: '#ffffff',
     fontSize: 16,
+    color: '#fff',
+    marginBottom: 24,
     textAlign: 'center',
   },
   loadingSubtext: {
-    color: '#ffffff',
     fontSize: 14,
+    color: '#888',
     textAlign: 'center',
-    marginBottom: 20,
-    opacity: 0.8,
+    marginTop: 12,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 10,
-    textAlign: 'center',
+  progressBarContainer: {
+    width: '100%',
+    height: 6,
+    backgroundColor: '#333',
+    borderRadius: 3,
+    marginBottom: 24,
+    overflow: 'hidden',
   },
-  subtitle: {
-    fontSize: 18,
-    color: '#ffffff',
-    textAlign: 'center',
-    marginBottom: 30,
-    opacity: 0.8,
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 3,
   },
-  sectionHeader: {
-    marginTop: 20,
-    marginBottom: 15,
+  stepItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 5,
-  },
-  resultCard: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
-  },
-  question: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-  answer: {
-    color: '#007AFF',
+  stepText: {
     fontSize: 16,
-    marginBottom: 10,
+    color: '#888',
+    marginLeft: 8,
   },
-  ctaContainer: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 12,
-    padding: 20,
-    marginTop: 20,
-    marginBottom: 40,
-  },
-  ctaTitle: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  ctaText: {
-    color: '#ffffff',
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 20,
-    opacity: 0.8,
-  },
-  ctaButton: {
-    backgroundColor: '#007AFF',
-    padding: 16,
-    borderRadius: 12,
+  statsContainer: {
+    marginTop: 48,
     alignItems: 'center',
   },
-  ctaButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
+  statWrapper: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  statText: {
+    fontSize: 16,
+    color: '#888',
+    textAlign: 'center',
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  ratingText: {
+    fontSize: 16,
+    color: '#888',
+    marginLeft: 8,
   },
   errorText: {
     color: '#ff0000',
@@ -572,10 +678,79 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    marginHorizontal: 20,
   },
   retryButtonText: {
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '600',
+  },
+  // Results screen styles
+  resultsContainer: {
+    padding: 20,
+  },
+  resultsTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 12,
+  },
+  resultsSubtitle: {
+    fontSize: 16,
+    color: '#888',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  scoreCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    width: '48%',
+  },
+  scoreHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  scoreLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginLeft: 8,
+  },
+  scoreValue: {
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  scoreBarContainer: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  scoreBar: {
+    height: '100%',
+    backgroundColor: '#fff',
+  },
+  ctaButton: {
+    backgroundColor: '#BB4430',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 40,
+  },
+  ctaButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
