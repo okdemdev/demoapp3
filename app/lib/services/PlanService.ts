@@ -7,7 +7,7 @@ const planWeekSchema = z.object({
   improvements: z.array(
     z.object({
       text: z.string(),
-      icon: z.string().optional(),
+      category: z.string(),
     })
   ),
 });
@@ -15,6 +15,8 @@ const planWeekSchema = z.object({
 const planSchema = z.object({
   weeks: z.array(planWeekSchema),
 });
+
+const DEFAULT_ICON = '➡️';
 
 export class PlanService {
   private static instance: PlanService;
@@ -31,37 +33,62 @@ export class PlanService {
     return PlanService.instance;
   }
 
-  private getIconForImprovement(text: string): string | undefined {
-    const iconMap: { [key: string]: string } = {
+  private getIconForCategory(category: string): string {
+    const categoryIcons: { [key: string]: string } = {
+      // Physical Health
       meditation: '🧘‍♂️',
       exercise: '💪',
-      reading: '📚',
       sleep: '😴',
-      routine: '📅',
-      habits: '✨',
-      confidence: '🌟',
-      purpose: '🎯',
-      clarity: '🧠',
-      mood: '😊',
-      knowledge: '📖',
-      metabolism: '🔥',
       water: '💧',
       breathing: '🫁',
       walking: '🚶',
+      stretching: '🤸‍♂️',
+      nutrition: '🥗',
+      workout: '💪',
+      fitness: '🏃',
+      yoga: '🧘',
+      health: '❤️',
+
+      // Mental Well-being
       mindfulness: '🎯',
       gratitude: '🙏',
       journaling: '📝',
-      nutrition: '🥗',
-      stretching: '🤸‍♂️',
+      reflection: '🤔',
+      focus: '🎯',
+      clarity: '🧠',
+      mood: '😊',
+      mental: '🧠',
+
+      // Learning & Growth
+      reading: '📚',
+      knowledge: '📖',
+      learning: '📚',
+      study: '📖',
+      growth: '🌱',
+
+      // Habits & Routine
+      routine: '📅',
+      habits: '✨',
+      planning: '📋',
+      organization: '📊',
+      productivity: '⚡️',
+
+      // Social & Emotional
+      confidence: '🌟',
+      social: '👥',
+      communication: '💭',
+      connection: '🤝',
+      emotional: '💝',
+
+      // Energy & Vitality
+      energy: '⚡️',
+      vitality: '✨',
+      metabolism: '🔥',
+      recovery: '🔄',
     };
 
-    const lowerText = text.toLowerCase();
-    for (const [key, icon] of Object.entries(iconMap)) {
-      if (lowerText.includes(key)) {
-        return icon;
-      }
-    }
-    return undefined;
+    const lowerCategory = category.toLowerCase();
+    return categoryIcons[lowerCategory] || DEFAULT_ICON;
   }
 
   private generateDateRange(weekNumber: number): {
@@ -94,14 +121,16 @@ Response Format Instructions:
       "weekNumber": number,
       "improvements": [
         {
-          "text": string (specific, actionable improvement)
+          "text": string (specific, actionable improvement),
+          "category": string (one of: meditation, exercise, sleep, water, breathing, walking, stretching, nutrition, workout, fitness, yoga, health, mindfulness, gratitude, journaling, reflection, focus, clarity, mood, mental, reading, knowledge, learning, study, growth, routine, habits, planning, organization, productivity, confidence, social, communication, connection, emotional, energy, vitality, metabolism, recovery)
         }
       ]
     }
   ]
 }
 3. Do not include any additional text or explanation
-4. Ensure all JSON properties match the exact names shown above`;
+4. Ensure all JSON properties match the exact names shown above
+5. Always include a category that best matches the improvement`;
 
       const userPrompt = `
 Create a 4-week improvement plan based on this user data:
@@ -119,6 +148,13 @@ Guidelines for improvements:
 - Focus on sustainable, long-term habits
 - Consider the user's current lifestyle and capabilities
 - Ensure improvements build upon each other progressively
+- For each improvement, assign a category from the list in the system message that best matches the activity
+
+Example improvement:
+{
+  "text": "Meditate for 10 minutes every morning after waking up",
+  "category": "meditation"
+}
 
 Remember to respond ONLY with the JSON object matching the specified structure.`.trim();
 
@@ -143,7 +179,7 @@ Remember to respond ONLY with the JSON object matching the specified structure.`
             endDate,
             improvements: week.improvements.map((improvement) => ({
               ...improvement,
-              icon: this.getIconForImprovement(improvement.text),
+              icon: this.getIconForCategory(improvement.category),
             })),
           };
         }),

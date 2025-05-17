@@ -2,11 +2,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   HabitsAnswer,
+  clearHabitsData,
   getHabitsData,
   saveHabitsAnswer,
 } from '../habitsStorage';
-import { Plan, getPlan, savePlan } from '../planStorage';
-import { QuizAnswer, getQuizData, saveQuizAnswer } from '../quizStorage';
+import { Plan, clearPlan, getPlan, savePlan } from '../planStorage';
+import {
+  QuizAnswer,
+  clearQuizData,
+  getQuizData,
+  saveQuizAnswer,
+} from '../quizStorage';
 import {
   clearSubscription,
   getSubscription,
@@ -290,7 +296,11 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       await Promise.all([
         clearSubscription(),
         clearTodos(),
+        clearQuizData(),
+        clearHabitsData(),
+        clearPlan(),
         AsyncStorage.removeItem('userData'),
+        AsyncStorage.removeItem('dayTracker'),
       ]);
       setUserData(null);
     } catch (error) {

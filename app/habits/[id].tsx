@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGlobal } from '../lib/context/GlobalContext';
 import { HabitsQuestion, habitsQuestions } from '../lib/habitsQuestions';
+import { markHabitsCompleted } from '../lib/habitsStorage';
 
 // Icons mapping based on habit type
 const HabitIcon = ({ name, selected }: { name: string; selected: boolean }) => {
@@ -142,8 +143,11 @@ export default function HabitsQuizScreen() {
             ? habitsQuestions[currentIndex + 1].id
             : null;
 
-        // If this is the last question, add a delay and verify data
+        // If this is the last question, mark habits as completed and verify data
         if (!nextID) {
+          // Mark habits as completed
+          await markHabitsCompleted();
+
           // Wait for 2 seconds to ensure data is saved
           await new Promise((resolve) => setTimeout(resolve, 2000));
 

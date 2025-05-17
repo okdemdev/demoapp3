@@ -6,6 +6,7 @@ export interface PlanWeek {
   endDate: string;
   improvements: {
     text: string;
+    category: string;
     icon?: string;
   }[];
 }
