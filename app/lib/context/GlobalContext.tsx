@@ -1,5 +1,10 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { HabitsAnswer, getHabitsData, saveHabitsAnswer } from '../habitsStorage';
+import {
+  HabitsAnswer,
+  getHabitsData,
+  saveHabitsAnswer,
+} from '../habitsStorage';
 import { QuizAnswer, getQuizData, saveQuizAnswer } from '../quizStorage';
 import {
   clearSubscription,
@@ -32,7 +37,11 @@ export interface GlobalData {
     active: boolean;
   };
   todos: Todo[];
+  metrics?: Record<MetricKey, number>;
+  lastMetricsUpdate?: number; // timestamp of last metrics calculation
 }
+
+type MetricKey = 'wisdom' | 'strength' | 'focus' | 'confidence' | 'discipline';
 
 interface GlobalContextType {
   userData: GlobalData | null;
@@ -51,6 +60,7 @@ interface GlobalContextType {
   addTodo: (text: string) => Promise<void>;
   toggleTodo: (id: string) => Promise<void>;
   uncheckAllTodos: () => Promise<void>;
+  updateMetrics: (metrics: Record<MetricKey, number>) => Promise<void>;
 }
 
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
@@ -66,53 +76,71 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
 
   const loadUserData = async () => {
     try {
-      const quizData = await getQuizData();
-      const habitsData = await getHabitsData();
-      const subscriptionData = await getSubscription();
-      const storedTodos = await getTodos();
+      const storedData = await AsyncStorage.getItem('userData');
+      if (storedData) {
+        setUserData(JSON.parse(storedData));
+      } else {
+        const quizData = await getQuizData();
+        const habitsData = await getHabitsData();
+        const subscriptionData = await getSubscription();
+        const storedTodos = await getTodos();
 
-      setUserData({
-        quiz: {
-          answers: quizData?.answers || [],
-          completed: quizData?.completed || false,
-          insights: {},
-        },
-        habits: {
-          answers: habitsData?.answers || [],
-          completed: habitsData?.completed || false,
-        },
-        subscription: subscriptionData || undefined,
-        todos:
-          storedTodos.length > 0
-            ? storedTodos
-            : [
-              {
-                id: '1',
-                text: 'Take a 10-minute meditation break',
-                completed: false,
-              },
-              {
-                id: '2',
-                text: 'Drink 8 glasses of water today',
-                completed: false,
-              },
-              { id: '3', text: 'Go for a 30-minute walk', completed: false },
-              {
-                id: '4',
-                text: 'Practice deep breathing exercises',
-                completed: false,
-              },
-              {
-                id: '5',
-                text: "Write down 3 things you're grateful for",
-                completed: false,
-              },
-            ],
-      });
+        setUserData({
+          quiz: {
+            answers: quizData?.answers || [],
+            completed: quizData?.completed || false,
+            insights: {},
+          },
+          habits: {
+            answers: habitsData?.answers || [],
+            completed: habitsData?.completed || false,
+          },
+          subscription: subscriptionData || undefined,
+          todos:
+            storedTodos.length > 0
+              ? storedTodos
+              : [
+                  {
+                    id: '1',
+                    text: 'Take a 10-minute meditation break',
+                    completed: false,
+                  },
+                  {
+                    id: '2',
+                    text: 'Drink 8 glasses of water today',
+                    completed: false,
+                  },
+                  {
+                    id: '3',
+                    text: 'Go for a 30-minute walk',
+                    completed: false,
+                  },
+                  {
+                    id: '4',
+                    text: 'Practice deep breathing exercises',
+                    completed: false,
+                  },
+                  {
+                    id: '5',
+                    text: "Write down 3 things you're grateful for",
+                    completed: false,
+                  },
+                ],
+        });
+      }
     } catch (error) {
       console.error('Error loading user data:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const saveUserData = async (newData: GlobalData) => {
+    try {
+      await AsyncStorage.setItem('userData', JSON.stringify(newData));
+      setUserData(newData);
+    } catch (error) {
+      console.error('Error saving user data:', error);
     }
   };
 
@@ -270,6 +298,18 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const updateMetrics = async (metrics: Record<MetricKey, number>) => {
+    if (!userData) return;
+
+    const newData = {
+      ...userData,
+      metrics,
+      lastMetricsUpdate: Date.now(),
+    };
+
+    await saveUserData(newData);
+  };
+
   return (
     <GlobalContext.Provider
       value={{
@@ -283,6 +323,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         addTodo,
         toggleTodo,
         uncheckAllTodos,
+        updateMetrics,
       }}
     >
       {children}
