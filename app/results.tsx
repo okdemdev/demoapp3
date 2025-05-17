@@ -381,6 +381,16 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     opacity: 0.8,
   },
+  sectionHeader: {
+    marginTop: 20,
+    marginBottom: 15,
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 5,
+  },
   resultCard: {
     backgroundColor: '#2a2a2a',
     borderRadius: 12,

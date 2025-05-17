@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { HabitsAnswer, getHabitsData, saveHabitsAnswer } from '../habitsStorage';
 import { QuizAnswer, getQuizData, saveQuizAnswer } from '../quizStorage';
 import {
   clearSubscription,
@@ -22,6 +23,10 @@ export interface GlobalData {
       [key: number]: string; // questionId -> AI generated insight
     };
   };
+  habits: {
+    answers: HabitsAnswer[];
+    completed: boolean;
+  };
   subscription?: {
     subscribedAt: string;
     active: boolean;
@@ -33,6 +38,10 @@ interface GlobalContextType {
   userData: GlobalData | null;
   isLoading: boolean;
   updateQuizAnswer: (
+    questionId: number,
+    answer: string | number
+  ) => Promise<void>;
+  updateHabitsAnswer: (
     questionId: number,
     answer: string | number
   ) => Promise<void>;
@@ -58,6 +67,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   const loadUserData = async () => {
     try {
       const quizData = await getQuizData();
+      const habitsData = await getHabitsData();
       const subscriptionData = await getSubscription();
       const storedTodos = await getTodos();
 
@@ -67,33 +77,37 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           completed: quizData?.completed || false,
           insights: {},
         },
+        habits: {
+          answers: habitsData?.answers || [],
+          completed: habitsData?.completed || false,
+        },
         subscription: subscriptionData || undefined,
         todos:
           storedTodos.length > 0
             ? storedTodos
             : [
-                {
-                  id: '1',
-                  text: 'Take a 10-minute meditation break',
-                  completed: false,
-                },
-                {
-                  id: '2',
-                  text: 'Drink 8 glasses of water today',
-                  completed: false,
-                },
-                { id: '3', text: 'Go for a 30-minute walk', completed: false },
-                {
-                  id: '4',
-                  text: 'Practice deep breathing exercises',
-                  completed: false,
-                },
-                {
-                  id: '5',
-                  text: "Write down 3 things you're grateful for",
-                  completed: false,
-                },
-              ],
+              {
+                id: '1',
+                text: 'Take a 10-minute meditation break',
+                completed: false,
+              },
+              {
+                id: '2',
+                text: 'Drink 8 glasses of water today',
+                completed: false,
+              },
+              { id: '3', text: 'Go for a 30-minute walk', completed: false },
+              {
+                id: '4',
+                text: 'Practice deep breathing exercises',
+                completed: false,
+              },
+              {
+                id: '5',
+                text: "Write down 3 things you're grateful for",
+                completed: false,
+              },
+            ],
       });
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -148,6 +162,38 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         },
       };
     });
+  };
+
+  const updateHabitsAnswer = async (
+    questionId: number,
+    answer: string | number
+  ) => {
+    try {
+      await saveHabitsAnswer(questionId, answer);
+      setUserData((prev) => {
+        if (!prev) return null;
+        const updatedAnswers = [...prev.habits.answers];
+        const existingIndex = updatedAnswers.findIndex(
+          (a) => a.questionId === questionId
+        );
+
+        if (existingIndex !== -1) {
+          updatedAnswers[existingIndex] = { questionId, answer };
+        } else {
+          updatedAnswers.push({ questionId, answer });
+        }
+
+        return {
+          ...prev,
+          habits: {
+            ...prev.habits,
+            answers: updatedAnswers,
+          },
+        };
+      });
+    } catch (error) {
+      console.error('Error updating habits answer:', error);
+    }
   };
 
   const updateSubscription = async (active: boolean) => {
@@ -230,6 +276,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         userData,
         isLoading,
         updateQuizAnswer,
+        updateHabitsAnswer,
         updateQuizInsight,
         updateSubscription,
         clearUserData,
