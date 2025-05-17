@@ -1,165 +1,334 @@
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { z } from 'zod';
 import { useGlobal } from './lib/context/GlobalContext';
-import { HabitsQuestion, habitsQuestions } from './lib/habitsQuestions';
-import quizQuestions, { QuizQuestion } from './lib/quizQuestions';
+import quizQuestions from './lib/quizQuestions';
+import { QuizAnswer } from './lib/quizStorage';
+import OpenAIService from './lib/services/OpenAIService';
+
+function clamp(val: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, val));
+}
+
+type MetricKey = 'wisdom' | 'strength' | 'focus' | 'confidence' | 'discipline';
+
+const METRIC_DESCRIPTIONS: Record<MetricKey, string> = {
+  wisdom:
+    "Wisdom (Self-awareness & Purpose) measures the user's self-understanding, sense of purpose, and ability to reflect on their life and choices.",
+  strength:
+    "Strength (Physical Health & Energy) measures the user's physical health, energy, and ability to maintain healthy habits.",
+  focus:
+    "Focus (Clarity & Attention) measures the user's ability to concentrate, avoid distractions, and maintain mental clarity.",
+  confidence:
+    "Confidence (Self-esteem & Support) measures the user's self-esteem, belief in themselves, and the strength of their support system.",
+  discipline:
+    "Discipline (Habits & Self-control) measures the user's ability to build good habits, avoid bad ones, and maintain self-control.",
+};
+
+// Schema for validating the score response
+const scoreSchema = z.preprocess((val) => {
+  // Try to parse the value as a number
+  const parsed = Number(String(val));
+  return isNaN(parsed) ? null : parsed;
+}, z.number().min(0).max(100).int()) as z.ZodType<number>;
+
+function buildContextString(answers: QuizAnswer[]): string {
+  return quizQuestions
+    .filter((q) => q.type !== 'message')
+    .map((q) => {
+      const userAnswer =
+        answers.find((a) => a.questionId === q.id)?.answer ?? '[No answer]';
+      return `Q${q.id}: ${q.question} — ${userAnswer}`;
+    })
+    .join('\n');
+}
+
+async function getMetricScore(
+  metric: MetricKey,
+  context: string
+): Promise<number> {
+  const openai = OpenAIService.getInstance();
+
+  // Create scoring guidelines based on the metric
+  const scoringCriteria = getScoringCriteria(metric);
+
+  const prompt = `
+Rate the person's "${metric}" on a scale from 0 to 100 based on their quiz answers.
+
+${METRIC_DESCRIPTIONS[metric]}
+
+SCORING CRITERIA:
+${scoringCriteria}
+
+QUESTIONS AND ANSWERS:
+${context}
+
+RESPONSE FORMAT: Single integer between 0-100 only.
+`.trim();
+
+  try {
+    // Try to get a score from OpenAI
+    const score = await openai.generateWithZodSchema<number>(
+      prompt,
+      'You are a scoring algorithm that outputs only a single integer between 0 and 100.',
+      scoreSchema,
+      2 // Reduced retries
+    );
+
+    // Ensure the score is a valid number between 0-100
+    return Math.min(100, Math.max(0, Math.round(score)));
+  } catch (error) {
+    console.error(`Error generating score for ${metric}:`, error);
+    // Return a fallback score
+    return 50;
+  }
+}
+
+// Helper function to get specific scoring criteria for each metric
+function getScoringCriteria(metric: MetricKey): string {
+  switch (metric) {
+    case 'wisdom':
+      return `
+- High scores (70-100): Clear life purpose, strong self-awareness, intrinsic motivation, reflective thinking
+- Medium scores (40-69): Developing purpose, growing self-awareness, mixed motivations
+- Low scores (0-39): Unclear purpose, limited self-awareness, external motivations only`;
+
+    case 'strength':
+      return `
+- High scores (70-100): Regular physical activity, quality sleep (7-8 hours), few/no addictions, good energy
+- Medium scores (40-69): Moderate activity, inconsistent sleep, managed addictions, fluctuating energy
+- Low scores (0-39): Minimal physical activity, poor sleep, multiple addictions, low energy`;
+
+    case 'focus':
+      return `
+- High scores (70-100): Excellent concentration, rarely distracted, clear mental state, recent accomplishments
+- Medium scores (40-69): Adequate concentration, occasional distraction, somewhat clear thinking
+- Low scores (0-39): Poor concentration, easily distracted, mental fog, lack of recent accomplishments`;
+
+    case 'confidence':
+      return `
+- High scores (70-100): Strong self-esteem, robust support network, regular self-care, confident decisions
+- Medium scores (40-69): Moderate self-esteem, some support, occasional self-care
+- Low scores (0-39): Low self-esteem, limited support network, neglects self-care`;
+
+    case 'discipline':
+      return `
+- High scores (70-100): Strong habits, excellent self-control, consistent routines, no addictions
+- Medium scores (40-69): Developing habits, moderate self-control, somewhat consistent routines
+- Low scores (0-39): Poor habits, weak self-control, inconsistent routines, multiple addictions`;
+  }
+}
+
+// Add a simple formula-based scoring fallback when OpenAI fails
+function calculateFallbackScore(
+  metric: MetricKey,
+  answers: QuizAnswer[]
+): number {
+  // Simple scoring system based on answer indices
+  // Higher indices generally correspond to more positive answers
+  let score = 50; // Default score
+  let totalWeight = 0;
+
+  // Each question might contribute differently to each metric
+  const questionWeights: Record<MetricKey, Record<number, number>> = {
+    wisdom: { 1: 2, 2: 3, 3: 1, 4: 2, 5: 3 },
+    strength: { 1: 1, 2: 3, 3: 3, 4: 2, 5: 1 },
+    focus: { 1: 1, 2: 1, 3: 3, 4: 3, 5: 2 },
+    confidence: { 1: 3, 2: 2, 3: 1, 4: 2, 5: 2 },
+    discipline: { 1: 2, 2: 1, 3: 2, 4: 3, 5: 3 },
+  };
+
+  // Calculate a weighted score based on the answers
+  answers.forEach((answer) => {
+    const questionId = Number(answer.questionId);
+
+    // Skip if not a number question or no weight for this metric
+    if (isNaN(questionId) || !questionWeights[metric][questionId]) {
+      return;
+    }
+
+    const weight = questionWeights[metric][questionId];
+    totalWeight += weight;
+
+    // Convert answer to a score (assumed to be index-based, 0-4)
+    let answerValue = 0;
+    if (typeof answer.answer === 'number') {
+      answerValue = answer.answer;
+    } else if (typeof answer.answer === 'string') {
+      const index = parseInt(answer.answer);
+      if (!isNaN(index)) {
+        answerValue = index;
+      }
+    }
+
+    // Contribute to the score (0-4 scale to 0-100 scale)
+    score += answerValue * 25 * weight;
+  });
+
+  // Normalize by weights
+  if (totalWeight > 0) {
+    score = Math.round(score / totalWeight);
+  }
+
+  // Ensure it's in range
+  return Math.min(100, Math.max(0, score));
+}
+
+async function computeMetrics(
+  answers: QuizAnswer[]
+): Promise<Record<MetricKey, number>> {
+  console.log('Starting metrics computation...');
+
+  // Build context from answers
+  const context = buildContextString(answers);
+
+  const metrics: Record<MetricKey, number> = {
+    wisdom: 0,
+    strength: 0,
+    focus: 0,
+    confidence: 0,
+    discipline: 0,
+  };
+
+  // Track if we're having consistent API failures
+  let apiFailureCount = 0;
+  const maxFailuresBeforeFallback = 2;
+  let useFallback = false;
+
+  // Process metrics one at a time to avoid rate limits
+  const metricKeys = Object.keys(METRIC_DESCRIPTIONS) as MetricKey[];
+
+  for (const metric of metricKeys) {
+    // If we've had too many failures, use fallback scoring instead
+    if (useFallback) {
+      metrics[metric] = calculateFallbackScore(metric, answers);
+      continue;
+    }
+
+    try {
+      const score = await getMetricScore(metric, context);
+      metrics[metric] = score;
+      // Reset failure count on success
+      apiFailureCount = 0;
+    } catch (error) {
+      console.error(`Failed to get score for ${metric}:`, error);
+      apiFailureCount++;
+
+      // Switch to fallback if we've had too many failures
+      if (apiFailureCount >= maxFailuresBeforeFallback) {
+        console.log('Too many API failures, switching to fallback scoring');
+        useFallback = true;
+        // Calculate this metric with fallback
+        metrics[metric] = calculateFallbackScore(metric, answers);
+      } else {
+        // Still use the default fallback for this metric
+        metrics[metric] = 50;
+      }
+    }
+  }
+
+  return metrics;
+}
 
 export default function ResultsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { userData, isLoading, updateSubscription } = useGlobal();
+  const [metrics, setMetrics] = useState<Record<MetricKey, number> | null>(
+    null
+  );
+  const [loadingMetrics, setLoadingMetrics] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Define calculate function for retry button
+  const calculate = async () => {
+    if (!userData?.quiz?.answers) {
+      setError('No quiz data found. Please complete the quiz first.');
+      return;
+    }
+
+    console.log('🔄 Manual retry of metrics calculation');
+    setLoadingMetrics(true);
+    setError(null);
+
+    try {
+      console.time('Metrics calculation (retry)');
+      const m = await computeMetrics(userData.quiz.answers);
+      console.timeEnd('Metrics calculation (retry)');
+      setMetrics(m);
+    } catch (err) {
+      console.error('❌ Error calculating metrics on retry:', err);
+      setError('Failed to calculate your metrics. Please try again later.');
+    } finally {
+      setLoadingMetrics(false);
+    }
+  };
+
+  useEffect(() => {
+    async function calculateInitial() {
+      if (userData?.quiz?.answers) {
+        console.log('🔄 Starting metrics calculation in useEffect');
+        setLoadingMetrics(true);
+        setError(null);
+
+        try {
+          console.time('Metrics calculation');
+          const m = await computeMetrics(userData.quiz.answers);
+          console.timeEnd('Metrics calculation');
+
+          console.log('📊 Setting metrics state with calculated values');
+          setMetrics(m);
+        } catch (err) {
+          console.error('❌ Error calculating metrics:', err);
+          setError('Failed to calculate your metrics. Please try again.');
+        } finally {
+          setLoadingMetrics(false);
+        }
+      } else {
+        console.warn('⚠️ No quiz answers available in userData');
+        setError('No quiz data found. Please complete the quiz first.');
+        setLoadingMetrics(false);
+      }
+    }
+    calculateInitial();
+  }, [userData]);
 
   const handleSubscribe = async () => {
     await updateSubscription(true);
     router.replace('/plan');
   };
 
-  const getAnswerText = (answer: {
-    questionId: number;
-    answer: string | number;
-  }, isHabit: boolean = false) => {
-    if (isHabit) {
-      const question = habitsQuestions.find(
-        (q) => q.id === answer.questionId
-      ) as HabitsQuestion | undefined;
-
-      if (!question) return '';
-
-      // Handle habits answers which use slider with discrete labels
-      const sliderIndex = Number(answer.answer) - 1;
-      const labels = question.sliderOptions?.labels || [];
-      return labels[sliderIndex] || answer.answer.toString();
-    } else {
-      const question = quizQuestions.find(
-        (q) => q.id === answer.questionId
-      ) as QuizQuestion | undefined;
-
-      if (!question) return '';
-
-      if (question.type === 'scale') {
-        return `${answer.answer}/10`;
-      }
-      return answer.answer.toString();
-    }
-  };
-
-  const getHabitSuggestion = (
-    questionId: number,
-    answer: { answer: string | number }
-  ) => {
-    // Convert to number since habits answers are slider indices
-    const score = Number(answer.answer);
-    const question = habitsQuestions.find(
-      (q) => q.id === questionId
-    ) as HabitsQuestion | undefined;
-
-    if (!question) return '';
-
-    switch (questionId) {
-      case 1: // Wake up time
-        if (score >= 4) return "Try going to bed 15 minutes earlier each night until you reach your target wake-up time.";
-        return "Maintain your early morning routine for optimal productivity.";
-
-      case 2: // Running
-        if (score <= 2) return "Consider starting with short walks, then progress to jogging for better cardiovascular health.";
-        return "Great job with running! Try varying your routes to keep it interesting.";
-
-      case 3: // Gym
-        if (score <= 2) return "Start with 2 days a week at the gym focusing on full-body workouts.";
-        return "Excellent gym routine! Make sure to include proper recovery periods.";
-
-      case 4: // Sit-ups
-        if (score <= 2) return "Begin with 3 sets of as many sit-ups as you can do. Gradually increase the count each week.";
-        return "Great core strength! Try adding variations like bicycle crunches to your routine.";
-
-      case 5: // Push-ups
-        if (score <= 2) return "Start with modified push-ups on your knees if needed, aiming for 3 sets of 5-10 repetitions.";
-        return "Excellent upper body strength! Consider adding diamond push-ups for tricep engagement.";
-
-      case 6: // Water
-        if (score <= 3) return "Keep a water bottle with you and set reminders to drink throughout the day.";
-        return "Great hydration habits! Try infusing water with fruits for variety.";
-
-      case 7: // Screentime limit
-        if (score >= 4) return "Try to reduce screen time by setting app limits and taking regular breaks every hour.";
-        return "You have healthy screen time habits. Continue being mindful of your digital consumption.";
-
-      case 8: // Cold shower
-        if (score <= 2) return "Consider starting with 30 seconds of cold water at the end of your regular shower, gradually increasing duration.";
-        return "Great discipline with cold showers! Continue this practice for improved circulation and mental resilience.";
-
-      default:
-        return '';
-    }
-  };
-
-  const getInsight = (
-    questionId: number,
-    answer: { answer: string | number }
-  ) => {
-    // First check if we have an AI-generated insight
-    if (userData?.quiz.insights?.[questionId]) {
-      return userData.quiz.insights[questionId];
-    }
-
-    // Fallback to static insights
-    switch (questionId) {
-      case 1: // Mental well-being
-        const score = Number(answer.answer);
-        if (score <= 3)
-          return 'Your mental well-being needs attention. Consider reaching out to a mental health professional.';
-        if (score <= 6)
-          return "Your mental well-being is moderate. There's room for improvement.";
-        return 'Great mental well-being! Keep up the good work!';
-
-      case 2: // Stress levels
-        if (answer.answer === 'Almost always')
-          return "High stress levels detected. Let's work on stress management techniques.";
-        if (answer.answer === 'Often')
-          return "Regular stress is affecting you. We'll help you develop coping strategies.";
-        return "Good stress management! Let's maintain this balance.";
-
-      case 3: // Sleep
-        if (answer.answer === 'Less than 5 hours')
-          return "Insufficient sleep can impact your health. Let's improve your sleep habits.";
-        if (answer.answer === '5-6 hours')
-          return "Your sleep could be better. We'll help you optimize your sleep schedule.";
-        return 'Great sleep habits! Keep maintaining this routine.';
-
-      case 4: // Physical activity
-        const activityScore = Number(answer.answer);
-        if (activityScore <= 3)
-          return "Low physical activity detected. Let's create an exercise plan that works for you.";
-        if (activityScore <= 6)
-          return 'Moderate activity level. We can help you increase your physical activity.';
-        return 'Excellent activity level! Keep up the great work!';
-
-      case 6: // Self-care
-        if (answer.answer === 'Never' || answer.answer === 'Rarely')
-          return "Self-care is important. We'll help you develop a self-care routine.";
-        if (answer.answer === 'Sometimes')
-          return "Good start with self-care. Let's make it more consistent.";
-        return 'Great self-care habits! Keep prioritizing yourself.';
-
-      case 7: // Social connections
-        const socialScore = Number(answer.answer);
-        if (socialScore <= 3)
-          return "Limited social connections. We'll help you build a stronger support network.";
-        if (socialScore <= 6)
-          return "Moderate social connections. Let's strengthen your relationships.";
-        return 'Strong social connections! Keep nurturing these relationships.';
-
-      default:
-        return '';
-    }
-  };
-
   if (isLoading || !userData) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <Text style={styles.loadingText}>Loading your results...</Text>
+        <Text style={styles.loadingText}>Loading your assessment data...</Text>
+      </View>
+    );
+  }
+
+  if (loadingMetrics) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <Text style={styles.loadingText}>
+          Computing your personalized scores...
+        </Text>
+        <Text style={styles.loadingSubtext}>
+          This may take a moment as we analyze your responses.
+        </Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <Text style={styles.errorText}>{error}</Text>
+        <Pressable style={styles.retryButton} onPress={calculate}>
+          <Text style={styles.retryButtonText}>Try Again</Text>
+        </Pressable>
       </View>
     );
   }
@@ -172,60 +341,20 @@ export default function ResultsScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         <Text style={styles.title}>Your Assessment Results</Text>
-        <Text style={styles.subtitle}>Here's what we've learned about you</Text>
-
-        {/* Quiz results */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Mindset Assessment</Text>
+        <Text style={styles.subtitle}>Here are your key life metrics</Text>
+        <View style={{ marginBottom: 30 }}>
+          {metrics &&
+            Object.entries(metrics).map(([key, value]) => (
+              <View key={key} style={styles.resultCard}>
+                <Text style={styles.question}>
+                  {key.charAt(0).toUpperCase() + key.slice(1)}
+                </Text>
+                <Text style={styles.answer}>
+                  {Math.round(Number(value))} / 100
+                </Text>
+              </View>
+            ))}
         </View>
-
-        {userData.quiz.answers.map((answer) => {
-          const question = quizQuestions.find(
-            (q) => q.id === answer.questionId
-          ) as QuizQuestion | undefined;
-
-          if (!question) return null;
-
-          const insight = getInsight(question.id, answer);
-          if (!insight) return null;
-
-          return (
-            <View key={`quiz-${answer.questionId}`} style={styles.resultCard}>
-              <Text style={styles.question}>{question.question}</Text>
-              <Text style={styles.answer}>
-                Your answer: {getAnswerText(answer)}
-              </Text>
-              <Text style={styles.insight}>{insight}</Text>
-            </View>
-          );
-        })}
-
-        {/* Habits results */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Habits Assessment</Text>
-        </View>
-
-        {userData.habits?.answers.map((answer) => {
-          const question = habitsQuestions.find(
-            (q) => q.id === answer.questionId
-          ) as HabitsQuestion | undefined;
-
-          if (!question) return null;
-
-          const suggestion = getHabitSuggestion(question.id, answer);
-          if (!suggestion) return null;
-
-          return (
-            <View key={`habits-${answer.questionId}`} style={styles.resultCard}>
-              <Text style={styles.question}>{question.question}</Text>
-              <Text style={styles.answer}>
-                Your answer: {getAnswerText(answer, true)}
-              </Text>
-              <Text style={styles.insight}>{suggestion}</Text>
-            </View>
-          );
-        })}
-
         <View style={styles.ctaContainer}>
           <Text style={styles.ctaTitle}>Ready to start your journey?</Text>
           <Text style={styles.ctaText}>
@@ -256,6 +385,13 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     textAlign: 'center',
+  },
+  loadingSubtext: {
+    color: '#ffffff',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    opacity: 0.8,
   },
   title: {
     fontSize: 32,
@@ -298,11 +434,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 10,
   },
-  insight: {
-    color: '#ffffff',
-    fontSize: 16,
-    opacity: 0.8,
-  },
   ctaContainer: {
     backgroundColor: '#2a2a2a',
     borderRadius: 12,
@@ -331,6 +462,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ctaButtonText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  errorText: {
+    color: '#ff0000',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#007AFF',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  retryButtonText: {
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '600',

@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -9,34 +9,13 @@ import Svg, { Path } from 'react-native-svg';
 // Custom Sun Logo component
 const SunLogo = ({ size = 64 }) => (
   <Svg width={size} height={size / 2} viewBox="0 0 64 32" fill="none">
-    <Path
-      d="M32 0C24 0 16 8 16 16H48C48 8 40 0 32 0Z"
-      fill="white"
-    />
-    <Path
-      d="M16 16H8C8 24 16 32 16 32V16Z"
-      fill="white"
-    />
-    <Path
-      d="M48 16H56C56 24 48 32 48 32V16Z"
-      fill="white"
-    />
-    <Path
-      d="M20 16H24V32H20V16Z"
-      fill="white"
-    />
-    <Path
-      d="M28 16H32V32H28V16Z"
-      fill="white"
-    />
-    <Path
-      d="M36 16H40V32H36V16Z"
-      fill="white"
-    />
-    <Path
-      d="M44 16H48V32H44V16Z"
-      fill="white"
-    />
+    <Path d="M32 0C24 0 16 8 16 16H48C48 8 40 0 32 0Z" fill="white" />
+    <Path d="M16 16H8C8 24 16 32 16 32V16Z" fill="white" />
+    <Path d="M48 16H56C56 24 48 32 48 32V16Z" fill="white" />
+    <Path d="M20 16H24V32H20V16Z" fill="white" />
+    <Path d="M28 16H32V32H28V16Z" fill="white" />
+    <Path d="M36 16H40V32H36V16Z" fill="white" />
+    <Path d="M44 16H48V32H44V16Z" fill="white" />
   </Svg>
 );
 
@@ -49,7 +28,7 @@ export default function WelcomeScreen() {
   const phrases = [
     'Welcome to Rise.',
     'Ready to start your life reset journey?',
-    'Your next 66 days will be the most transformative period of your life ever.'
+    'Your next 66 days will be the most transformative period of your life ever.',
   ];
   const [displayedText, setDisplayedText] = useState('');
   const [typingComplete, setTypingComplete] = useState(false);
@@ -68,7 +47,7 @@ export default function WelcomeScreen() {
         duration: 300,
         useNativeDriver: true,
         delay: 100,
-      })
+      }),
     ]).start();
   };
 
@@ -84,8 +63,7 @@ export default function WelcomeScreen() {
         setDisplayedText(text.slice(0, index));
 
         // Trigger haptic feedback
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-          .catch(() => { }); // Ignore errors
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); // Ignore errors
 
         index++;
         typingTimerRef.current = setTimeout(typeChar, 70) as any;
@@ -123,7 +101,7 @@ export default function WelcomeScreen() {
     if (currentScreen < 2) {
       fadeToNextScreen();
       setTimeout(() => {
-        setCurrentScreen(prevScreen => prevScreen + 1);
+        setCurrentScreen((prevScreen) => prevScreen + 1);
       }, 300); // Wait for fade out before changing screen
     } else {
       // Navigate to quiz page - start with intro page
@@ -152,15 +130,17 @@ export default function WelcomeScreen() {
             <Text style={styles.cardSubtitle}>life reset program</Text>
 
             <View style={styles.grid}>
-              {Array(66).fill(0).map((_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.gridItem,
-                    Math.random() > 0.7 ? styles.gridItemHighlighted : {}
-                  ]}
-                />
-              ))}
+              {Array(66)
+                .fill(0)
+                .map((_, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.gridItem,
+                      Math.random() > 0.7 ? styles.gridItemHighlighted : {},
+                    ]}
+                  />
+                ))}
             </View>
 
             <Text style={styles.cardDate}>17 May 2025</Text>
@@ -169,11 +149,22 @@ export default function WelcomeScreen() {
 
         {/* Continue Button - show when typing is complete */}
         {typingComplete && (
-          <Pressable style={styles.button} onPress={handleContinue}>
-            <Text style={styles.buttonText}>
-              {currentScreen < 2 ? 'Continue' : 'Start Now'}
-            </Text>
-          </Pressable>
+          <React.Fragment>
+            <Pressable style={styles.button} onPress={handleContinue}>
+              <Text style={styles.buttonText}>
+                {currentScreen < 2 ? 'Continue' : 'Start Now'}
+              </Text>
+            </Pressable>
+
+            {currentScreen === 2 && (
+              <Pressable
+                style={[styles.button, styles.resultsButton]}
+                onPress={() => router.push('/results')}
+              >
+                <Text style={styles.buttonText}>View Results</Text>
+              </Pressable>
+            )}
+          </React.Fragment>
         )}
       </Animated.View>
     </View>
@@ -265,6 +256,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+  },
+  resultsButton: {
+    backgroundColor: '#3a7bd5',
+    marginTop: 16,
   },
   buttonText: {
     color: '#fff',
