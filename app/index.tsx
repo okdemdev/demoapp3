@@ -156,7 +156,7 @@ export default function WelcomeScreen() {
               </Text>
             </Pressable>
 
-            {currentScreen === 2 && (
+            {currentScreen === 0 && (
               <Pressable
                 style={[styles.button, styles.resultsButton]}
                 onPress={() => router.push('/results')}
