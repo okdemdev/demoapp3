@@ -97,9 +97,7 @@ function buildContextString(
 
 async function getMetricScore(
   metric: MetricKey,
-  context: string,
-  quizAnswers: QuizAnswer[],
-  habitsAnswers: HabitsAnswer[]
+  context: string
 ): Promise<number> {
   const openai = OpenAIService.getInstance();
 
@@ -129,8 +127,7 @@ RESPONSE FORMAT: Single integer between 0-100 only.
 
     return Math.min(100, Math.max(0, Math.round(score)));
   } catch (error) {
-    console.error(`Error generating score for ${metric}:`, error);
-    return calculateFallbackScore(metric, quizAnswers, habitsAnswers);
+    throw new Error(`Error generating score for ${metric}: ${error}`);
   }
 }
 
@@ -275,37 +272,62 @@ async function computeMetrics(
   console.log('Starting metrics computation with quiz and habits data...');
   const context = buildContextString(quizAnswers, habitsAnswers);
 
+  // Initialize metrics with fallback scores first
   const metrics: Record<MetricKey, number> = {
-    wisdom: 0,
-    strength: 0,
-    focus: 0,
-    confidence: 0,
-    discipline: 0,
+    wisdom: calculateFallbackScore('wisdom', quizAnswers, habitsAnswers),
+    strength: calculateFallbackScore('strength', quizAnswers, habitsAnswers),
+    focus: calculateFallbackScore('focus', quizAnswers, habitsAnswers),
+    confidence: calculateFallbackScore(
+      'confidence',
+      quizAnswers,
+      habitsAnswers
+    ),
+    discipline: calculateFallbackScore(
+      'discipline',
+      quizAnswers,
+      habitsAnswers
+    ),
   };
 
-  // Process metrics sequentially to avoid rate limits
-  const metricKeys = Object.keys(METRIC_DESCRIPTIONS) as MetricKey[];
+  try {
+    // Create promises for all metrics at once
+    const metricPromises = Object.keys(METRIC_DESCRIPTIONS).map(
+      async (metricKey) => {
+        const metric = metricKey as MetricKey;
+        try {
+          const score = await getMetricScore(
+            metric,
+            context,
+            quizAnswers,
+            habitsAnswers
+          );
+          return { metric, score };
+        } catch (error) {
+          console.warn(
+            `Failed to get score for ${metric}, keeping fallback:`,
+            error
+          );
+          return { metric, score: metrics[metric] }; // Keep fallback score
+        }
+      }
+    );
 
-  for (const metric of metricKeys) {
-    try {
-      const score = await getMetricScore(
-        metric,
-        context,
-        quizAnswers,
-        habitsAnswers
-      );
-      metrics[metric] = score;
-    } catch (error) {
-      console.error(
-        `Failed to get score for ${metric}, using fallback:`,
-        error
-      );
-      metrics[metric] = calculateFallbackScore(
-        metric,
-        quizAnswers,
-        habitsAnswers
-      );
-    }
+    // Wait for all promises to settle (either resolve or reject)
+    const results = await Promise.allSettled(metricPromises);
+
+    // Update metrics with successful results
+    results.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        const { metric, score } = result.value;
+        metrics[metric] = score;
+      }
+      // For rejected promises, we keep the fallback score that's already set
+    });
+
+    console.log('Final metrics (mix of API and fallback):', metrics);
+  } catch (error) {
+    console.warn('Error during parallel metrics computation:', error);
+    // We already have fallback scores, so we can continue
   }
 
   return metrics;
@@ -479,8 +501,8 @@ export default function ResultsScreen() {
     router.push({
       pathname: '/potential-ratings' as any,
       params: {
-        metrics: JSON.stringify(metrics)
-      }
+        metrics: JSON.stringify(metrics),
+      },
     });
   };
 
@@ -637,7 +659,10 @@ export default function ResultsScreen() {
               ))}
             </View>
 
-            <Pressable style={styles.ctaButton} onPress={navigateToPotentialRatings}>
+            <Pressable
+              style={styles.ctaButton}
+              onPress={navigateToPotentialRatings}
+            >
               <Text style={styles.ctaButtonText}>See Potential Ratings</Text>
             </Pressable>
           </View>
