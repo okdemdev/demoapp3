@@ -1,30 +1,19 @@
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useGlobal } from './lib/context/GlobalContext';
 import quizQuestions from './lib/quizQuestions';
-import { getQuizData, QuizAnswer } from './lib/quizStorage';
 
 export default function ResultsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [quizData, setQuizData] = useState<QuizAnswer[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { userData, isLoading } = useGlobal();
 
-  useEffect(() => {
-    loadQuizData();
-  }, []);
-
-  const loadQuizData = async () => {
-    const data = await getQuizData();
-    if (data) {
-      setQuizData(data.answers);
-    }
-    setIsLoading(false);
-  };
-
-  const getAnswerText = (answer: QuizAnswer) => {
+  const getAnswerText = (answer: {
+    questionId: number;
+    answer: string | number;
+  }) => {
     const question = quizQuestions.find((q) => q.id === answer.questionId);
     if (!question) return '';
 
@@ -34,7 +23,16 @@ export default function ResultsScreen() {
     return answer.answer.toString();
   };
 
-  const getInsight = (questionId: number, answer: QuizAnswer) => {
+  const getInsight = (
+    questionId: number,
+    answer: { answer: string | number }
+  ) => {
+    // First check if we have an AI-generated insight
+    if (userData?.quiz.insights?.[questionId]) {
+      return userData.quiz.insights[questionId];
+    }
+
+    // Fallback to static insights
     switch (questionId) {
       case 1: // Mental well-being
         const score = Number(answer.answer);
@@ -86,7 +84,7 @@ export default function ResultsScreen() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || !userData) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <Text style={styles.loadingText}>Loading your results...</Text>
@@ -104,7 +102,7 @@ export default function ResultsScreen() {
         <Text style={styles.title}>Your Assessment Results</Text>
         <Text style={styles.subtitle}>Here's what we've learned about you</Text>
 
-        {quizData.map((answer) => {
+        {userData.quiz.answers.map((answer) => {
           const question = quizQuestions.find(
             (q) => q.id === answer.questionId
           );
