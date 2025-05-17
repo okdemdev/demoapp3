@@ -412,38 +412,38 @@ export default function ResultsScreen() {
   };
 
   // Define calculate function for retry button
-  const calculate = async () => {
-    if (!userData?.quiz?.answers) {
-      setError('No quiz data found. Please complete the quiz first.');
-      return;
-    }
+  // const calculate = async () => {
+  //   if (!userData?.quiz?.answers) {
+  //     setError('No quiz data found. Please complete the quiz first.');
+  //     return;
+  //   }
 
-    console.log('🔄 Manual retry of metrics calculation');
-    setCurrentStep(0); // Reset to first loading step
-    setError(null);
-    setIsCalculating(true);
+  //   console.log('🔄 Manual retry of metrics calculation');
+  //   setCurrentStep(0); // Reset to first loading step
+  //   setError(null);
+  //   setIsCalculating(true);
 
-    // Animate through loading steps
-    animateLoadingSequence();
+  //   // Animate through loading steps
+  //   animateLoadingSequence();
 
-    try {
-      console.time('Metrics calculation (retry)');
-      const m = await computeMetrics(
-        userData.quiz.answers,
-        userData.habits?.answers || []
-      );
-      console.timeEnd('Metrics calculation (retry)');
+  //   try {
+  //     console.time('Metrics calculation (retry)');
+  //     const m = await computeMetrics(
+  //       userData.quiz.answers,
+  //       userData.habits?.answers || []
+  //     );
+  //     console.timeEnd('Metrics calculation (retry)');
 
-      // Save metrics to global context and storage
-      await updateMetrics(m);
-      setMetrics(m);
-    } catch (err) {
-      console.error('❌ Error calculating metrics on retry:', err);
-      setError('Failed to calculate your metrics. Please try again later.');
-    } finally {
-      setIsCalculating(false);
-    }
-  };
+  //     // Save metrics to global context and storage
+  //     await updateMetrics(m);
+  //     setMetrics(m);
+  //   } catch (err) {
+  //     console.error('❌ Error calculating metrics on retry:', err);
+  //     setError('Failed to calculate your metrics. Please try again later.');
+  //   } finally {
+  //     setIsCalculating(false);
+  //   }
+  // };
 
   useEffect(() => {
     async function calculateInitial() {
@@ -548,9 +548,9 @@ export default function ResultsScreen() {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <StatusBar style="light" />
         <Text style={styles.errorText}>{error}</Text>
-        <Pressable style={styles.retryButton} onPress={calculate}>
+        {/* <Pressable style={styles.retryButton} onPress={calculate}>
           <Text style={styles.retryButtonText}>Try Again</Text>
-        </Pressable>
+        </Pressable> */}
       </View>
     );
   }

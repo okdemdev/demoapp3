@@ -8,10 +8,11 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import NoteIcon from '../assets/note-icon';
+import { useGlobal } from '../lib/context/GlobalContext';
 import quizQuestions from '../lib/quizQuestions';
 import { getQuizData, saveQuizAnswer } from '../lib/quizStorage';
 
@@ -23,6 +24,7 @@ export default function QuizScreen() {
   const question = quizQuestions.find((q) => q.id === questionId);
   const [answer, setAnswer] = useState<string | number>('');
   const [isLoading, setIsLoading] = useState(true);
+  const { updateQuizAnswer } = useGlobal();
 
   // Check if we're on the intro page (id=0)
   const isIntroPage = questionId === 0;
@@ -53,7 +55,7 @@ export default function QuizScreen() {
     setIsLoading(false);
   };
 
-  if (!question && !isIntroPage || isLoading) {
+  if ((!question && !isIntroPage) || isLoading) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <Text style={styles.loadingText}>Loading...</Text>
@@ -62,23 +64,30 @@ export default function QuizScreen() {
   }
 
   const handleNext = async () => {
-    if (isIntroPage) {
-      // If on intro page, just move to the first question
-      router.push('/quiz/1');
-      return;
-    }
-
-    if (isMessageScreen || answer !== '') {
-      if (!isMessageScreen) {
-        await saveQuizAnswer(questionId, answer);
+    try {
+      if (isIntroPage) {
+        // If on intro page, just move to the first question
+        router.push('/quiz/1');
+        return;
       }
 
+      // If it's a regular question (not a message screen), save the answer first
+      if (!isMessageScreen && answer !== undefined && answer !== '') {
+        // Save to both local storage and global context
+        await Promise.all([
+          saveQuizAnswer(questionId, answer),
+          updateQuizAnswer(questionId, answer),
+        ]);
+      }
+
+      // Then navigate to the next question
       if (questionId < quizQuestions.length) {
         router.push(`/quiz/${questionId + 1}`);
       } else {
-        // Navigate to the onboarding screen instead of results
         router.push('/onboarding');
       }
+    } catch (error) {
+      console.error('Error saving quiz answer:', error);
     }
   };
 
@@ -101,12 +110,11 @@ export default function QuizScreen() {
 
         <NoteIcon width={80} height={80} />
 
-        <Text style={styles.introText}>
-          Answer all questions honestly.
-        </Text>
+        <Text style={styles.introText}>Answer all questions honestly.</Text>
 
         <Text style={styles.introText}>
-          We will use the answers to design a tailor-made life reset program for you.
+          We will use the answers to design a tailor-made life reset program for
+          you.
         </Text>
       </View>
     );
@@ -120,25 +128,24 @@ export default function QuizScreen() {
 
     return (
       <View style={styles.messageContainer}>
-        {emoji && (
-          <Text style={styles.messageEmoji}>{emoji}</Text>
-        )}
+        {emoji && <Text style={styles.messageEmoji}>{emoji}</Text>}
 
-        {title && (
-          <Text style={styles.messageTitle}>{title}</Text>
-        )}
+        {title && <Text style={styles.messageTitle}>{title}</Text>}
 
-        {text && text.map((line, index) => (
-          <Text
-            key={index}
-            style={[
-              styles.messageText,
-              index === 1 && line.includes('315%') ? styles.highlightedText : {}
-            ]}
-          >
-            {line}
-          </Text>
-        ))}
+        {text &&
+          text.map((line, index) => (
+            <Text
+              key={index}
+              style={[
+                styles.messageText,
+                index === 1 && line.includes('315%')
+                  ? styles.highlightedText
+                  : {},
+              ]}
+            >
+              {line}
+            </Text>
+          ))}
 
         {testimonial && (
           <View style={styles.testimonialCard}>
@@ -148,7 +155,9 @@ export default function QuizScreen() {
             <Text style={styles.testimonialText}>{testimonial.text}</Text>
             <View style={styles.ratingContainer}>
               {[1, 2, 3, 4, 5].map((star) => (
-                <Text key={star} style={styles.starRating}>⭐</Text>
+                <Text key={star} style={styles.starRating}>
+                  ⭐
+                </Text>
               ))}
             </View>
           </View>
@@ -201,7 +210,9 @@ export default function QuizScreen() {
                 onPress={() => setAnswer(option)}
               >
                 {question.emojis && question.emojis[index] && (
-                  <Text style={styles.optionEmoji}>{question.emojis[index]} </Text>
+                  <Text style={styles.optionEmoji}>
+                    {question.emojis[index]}{' '}
+                  </Text>
                 )}
                 <Text
                   style={[
@@ -237,10 +248,12 @@ export default function QuizScreen() {
     if (isIntroPage) return 0;
 
     // Count regular questions only (not messages)
-    const totalQuestions = quizQuestions.filter(q => q.type !== 'message').length;
-    const questionsBefore = quizQuestions
-      .filter(q => q.id < questionId && q.type !== 'message')
-      .length;
+    const totalQuestions = quizQuestions.filter(
+      (q) => q.type !== 'message'
+    ).length;
+    const questionsBefore = quizQuestions.filter(
+      (q) => q.id < questionId && q.type !== 'message'
+    ).length;
 
     return (questionsBefore / totalQuestions) * 100;
   };
@@ -252,19 +265,13 @@ export default function QuizScreen() {
       {/* Progress Bar */}
       <View style={styles.progressBarContainer}>
         <View
-          style={[
-            styles.progressBar,
-            { width: `${calculateProgress()}%` }
-          ]}
+          style={[styles.progressBar, { width: `${calculateProgress()}%` }]}
         />
       </View>
 
       {/* Back Button - only show if not on intro */}
       {!isIntroPage && (
-        <Pressable
-          style={styles.backButton}
-          onPress={handleBack}
-        >
+        <Pressable style={styles.backButton} onPress={handleBack}>
           <Text style={styles.backButtonText}>←</Text>
         </Pressable>
       )}
@@ -273,7 +280,7 @@ export default function QuizScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          (isIntroPage || isMessageScreen) && styles.centeredContent
+          (isIntroPage || isMessageScreen) && styles.centeredContent,
         ]}
       >
         {isIntroPage ? (
@@ -292,7 +299,9 @@ export default function QuizScreen() {
         <Pressable
           style={[
             styles.nextButton,
-            !isMessageScreen && !isIntroPage && !answer ? styles.nextButtonDisabled : {}
+            !isMessageScreen && !isIntroPage && !answer
+              ? styles.nextButtonDisabled
+              : {},
           ]}
           onPress={handleNext}
           disabled={!isMessageScreen && !isIntroPage && !answer}
@@ -301,11 +310,10 @@ export default function QuizScreen() {
             {isIntroPage
               ? 'Got it'
               : questionId === quizQuestions.length
-                ? 'Finish'
-                : isMessageScreen
-                  ? 'Continue'
-                  : 'Next'
-            }
+              ? 'Finish'
+              : isMessageScreen
+              ? 'Continue'
+              : 'Next'}
           </Text>
         </Pressable>
       </View>
