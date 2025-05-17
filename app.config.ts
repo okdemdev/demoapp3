@@ -6,7 +6,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: 'lifeguide',
   version: '1.0.0',
   orientation: 'portrait',
-  icon: './assets/icon.png',
   userInterfaceStyle: 'dark',
   splash: {
     image: './assets/splash.png',

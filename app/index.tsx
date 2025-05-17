@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -149,11 +149,22 @@ export default function WelcomeScreen() {
 
         {/* Continue Button - show when typing is complete */}
         {typingComplete && (
-          <Pressable style={styles.button} onPress={handleContinue}>
-            <Text style={styles.buttonText}>
-              {currentScreen < 2 ? 'Continue' : 'Start Now'}
-            </Text>
-          </Pressable>
+          <React.Fragment>
+            <Pressable style={styles.button} onPress={handleContinue}>
+              <Text style={styles.buttonText}>
+                {currentScreen < 2 ? 'Continue' : 'Start Now'}
+              </Text>
+            </Pressable>
+
+            {currentScreen === 2 && (
+              <Pressable
+                style={[styles.button, styles.resultsButton]}
+                onPress={() => router.push('/results')}
+              >
+                <Text style={styles.buttonText}>View Results</Text>
+              </Pressable>
+            )}
+          </React.Fragment>
         )}
       </Animated.View>
     </View>
@@ -245,6 +256,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+  },
+  resultsButton: {
+    backgroundColor: '#3a7bd5',
+    marginTop: 16,
   },
   buttonText: {
     color: '#fff',

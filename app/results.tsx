@@ -3,40 +3,189 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { z } from 'zod';
 import { useGlobal } from './lib/context/GlobalContext';
 import quizQuestions from './lib/quizQuestions';
 import { QuizAnswer } from './lib/quizStorage';
 import OpenAIService from './lib/services/OpenAIService';
 
-function scoreRange(
-  answerIndex: number,
-  maxIndex: number,
-  maxPoints: number
-): number {
-  return (answerIndex / maxIndex) * maxPoints;
-}
-
 function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
 
-async function sentimentScore(text: string): Promise<number> {
-  if (!text || text.trim() === '') return 0;
-  // Use OpenAI to get a sentiment score 0-10
+type MetricKey = 'wisdom' | 'strength' | 'focus' | 'confidence' | 'discipline';
+
+const METRIC_DESCRIPTIONS: Record<MetricKey, string> = {
+  wisdom:
+    "Wisdom (Self-awareness & Purpose) measures the user's self-understanding, sense of purpose, and ability to reflect on their life and choices.",
+  strength:
+    "Strength (Physical Health & Energy) measures the user's physical health, energy, and ability to maintain healthy habits.",
+  focus:
+    "Focus (Clarity & Attention) measures the user's ability to concentrate, avoid distractions, and maintain mental clarity.",
+  confidence:
+    "Confidence (Self-esteem & Support) measures the user's self-esteem, belief in themselves, and the strength of their support system.",
+  discipline:
+    "Discipline (Habits & Self-control) measures the user's ability to build good habits, avoid bad ones, and maintain self-control.",
+};
+
+// Schema for validating the score response
+const scoreSchema = z.preprocess((val) => {
+  // Try to parse the value as a number
+  const parsed = Number(String(val));
+  return isNaN(parsed) ? null : parsed;
+}, z.number().min(0).max(100).int()) as z.ZodType<number>;
+
+function buildContextString(answers: QuizAnswer[]): string {
+  return quizQuestions
+    .filter((q) => q.type !== 'message')
+    .map((q) => {
+      const userAnswer =
+        answers.find((a) => a.questionId === q.id)?.answer ?? '[No answer]';
+      return `Q${q.id}: ${q.question} — ${userAnswer}`;
+    })
+    .join('\n');
+}
+
+async function getMetricScore(
+  metric: MetricKey,
+  context: string
+): Promise<number> {
   const openai = OpenAIService.getInstance();
-  const prompt = `Rate the following text for clarity, specificity, and growth language on a scale from 0 (very vague/negative) to 10 (very clear/positive):\n\n"${text}"\n\nRespond with only a single number.`;
-  const response = await openai.generateCustomResponse(
-    prompt,
-    'You are a helpful assistant scoring self-reflection answers.'
-  );
-  const num = parseInt(response.match(/\d+/)?.[0] || '0', 10);
-  return clamp(num, 0, 10);
+
+  // Create scoring guidelines based on the metric
+  const scoringCriteria = getScoringCriteria(metric);
+
+  const prompt = `
+Rate the person's "${metric}" on a scale from 0 to 100 based on their quiz answers.
+
+${METRIC_DESCRIPTIONS[metric]}
+
+SCORING CRITERIA:
+${scoringCriteria}
+
+QUESTIONS AND ANSWERS:
+${context}
+
+RESPONSE FORMAT: Single integer between 0-100 only.
+`.trim();
+
+  try {
+    // Try to get a score from OpenAI
+    const score = await openai.generateWithZodSchema<number>(
+      prompt,
+      'You are a scoring algorithm that outputs only a single integer between 0 and 100.',
+      scoreSchema,
+      2 // Reduced retries
+    );
+
+    // Ensure the score is a valid number between 0-100
+    return Math.min(100, Math.max(0, Math.round(score)));
+  } catch (error) {
+    console.error(`Error generating score for ${metric}:`, error);
+    // Return a fallback score
+    return 50;
+  }
+}
+
+// Helper function to get specific scoring criteria for each metric
+function getScoringCriteria(metric: MetricKey): string {
+  switch (metric) {
+    case 'wisdom':
+      return `
+- High scores (70-100): Clear life purpose, strong self-awareness, intrinsic motivation, reflective thinking
+- Medium scores (40-69): Developing purpose, growing self-awareness, mixed motivations
+- Low scores (0-39): Unclear purpose, limited self-awareness, external motivations only`;
+
+    case 'strength':
+      return `
+- High scores (70-100): Regular physical activity, quality sleep (7-8 hours), few/no addictions, good energy
+- Medium scores (40-69): Moderate activity, inconsistent sleep, managed addictions, fluctuating energy
+- Low scores (0-39): Minimal physical activity, poor sleep, multiple addictions, low energy`;
+
+    case 'focus':
+      return `
+- High scores (70-100): Excellent concentration, rarely distracted, clear mental state, recent accomplishments
+- Medium scores (40-69): Adequate concentration, occasional distraction, somewhat clear thinking
+- Low scores (0-39): Poor concentration, easily distracted, mental fog, lack of recent accomplishments`;
+
+    case 'confidence':
+      return `
+- High scores (70-100): Strong self-esteem, robust support network, regular self-care, confident decisions
+- Medium scores (40-69): Moderate self-esteem, some support, occasional self-care
+- Low scores (0-39): Low self-esteem, limited support network, neglects self-care`;
+
+    case 'discipline':
+      return `
+- High scores (70-100): Strong habits, excellent self-control, consistent routines, no addictions
+- Medium scores (40-69): Developing habits, moderate self-control, somewhat consistent routines
+- Low scores (0-39): Poor habits, weak self-control, inconsistent routines, multiple addictions`;
+  }
+}
+
+// Add a simple formula-based scoring fallback when OpenAI fails
+function calculateFallbackScore(
+  metric: MetricKey,
+  answers: QuizAnswer[]
+): number {
+  // Simple scoring system based on answer indices
+  // Higher indices generally correspond to more positive answers
+  let score = 50; // Default score
+  let totalWeight = 0;
+
+  // Each question might contribute differently to each metric
+  const questionWeights: Record<MetricKey, Record<number, number>> = {
+    wisdom: { 1: 2, 2: 3, 3: 1, 4: 2, 5: 3 },
+    strength: { 1: 1, 2: 3, 3: 3, 4: 2, 5: 1 },
+    focus: { 1: 1, 2: 1, 3: 3, 4: 3, 5: 2 },
+    confidence: { 1: 3, 2: 2, 3: 1, 4: 2, 5: 2 },
+    discipline: { 1: 2, 2: 1, 3: 2, 4: 3, 5: 3 },
+  };
+
+  // Calculate a weighted score based on the answers
+  answers.forEach((answer) => {
+    const questionId = Number(answer.questionId);
+
+    // Skip if not a number question or no weight for this metric
+    if (isNaN(questionId) || !questionWeights[metric][questionId]) {
+      return;
+    }
+
+    const weight = questionWeights[metric][questionId];
+    totalWeight += weight;
+
+    // Convert answer to a score (assumed to be index-based, 0-4)
+    let answerValue = 0;
+    if (typeof answer.answer === 'number') {
+      answerValue = answer.answer;
+    } else if (typeof answer.answer === 'string') {
+      const index = parseInt(answer.answer);
+      if (!isNaN(index)) {
+        answerValue = index;
+      }
+    }
+
+    // Contribute to the score (0-4 scale to 0-100 scale)
+    score += answerValue * 25 * weight;
+  });
+
+  // Normalize by weights
+  if (totalWeight > 0) {
+    score = Math.round(score / totalWeight);
+  }
+
+  // Ensure it's in range
+  return Math.min(100, Math.max(0, score));
 }
 
 async function computeMetrics(
   answers: QuizAnswer[]
-): Promise<Record<string, number>> {
-  const metrics: Record<string, number> = {
+): Promise<Record<MetricKey, number>> {
+  console.log('Starting metrics computation...');
+
+  // Build context from answers
+  const context = buildContextString(answers);
+
+  const metrics: Record<MetricKey, number> = {
     wisdom: 0,
     strength: 0,
     focus: 0,
@@ -44,125 +193,43 @@ async function computeMetrics(
     discipline: 0,
   };
 
-  // Map answers by question id for easier access
-  const a: Record<number, string | number> = {};
-  answers.forEach((ans: QuizAnswer) => {
-    a[ans.questionId] = ans.answer;
-  });
+  // Track if we're having consistent API failures
+  let apiFailureCount = 0;
+  const maxFailuresBeforeFallback = 2;
+  let useFallback = false;
 
-  // --- Wisdom ---
-  const lifeIdx = quizQuestions[2].options?.indexOf(String(a[3])) ?? 0; // Q3
-  const purposeIdx = quizQuestions[3].options?.indexOf(String(a[4])) ?? 0; // Q4
-  const motiveIdx = quizQuestions[6].options?.indexOf(String(a[7])) ?? 0; // Q7
-  const textScore = await sentimentScore(String(a[14] || '')); // Q14
-  metrics.wisdom =
-    scoreRange(lifeIdx, 4, 15) +
-    scoreRange(purposeIdx, 5, 10) +
-    scoreRange(motiveIdx, 5, 15) +
-    textScore;
+  // Process metrics one at a time to avoid rate limits
+  const metricKeys = Object.keys(METRIC_DESCRIPTIONS) as MetricKey[];
 
-  // --- Strength ---
-  let sleepPoints = 0;
-  switch (quizQuestions[11].options?.indexOf(String(a[12]))) {
-    case 2:
-      sleepPoints = 30;
-      break; // 7-8h
-    case 3:
-      sleepPoints = 20;
-      break; // >8h
-    case 1:
-      sleepPoints = 20;
-      break; // 5-6h
-    case 0:
-      sleepPoints = 5;
-      break; // <5h
-    default:
-      sleepPoints = 0;
+  for (const metric of metricKeys) {
+    // If we've had too many failures, use fallback scoring instead
+    if (useFallback) {
+      metrics[metric] = calculateFallbackScore(metric, answers);
+      continue;
+    }
+
+    try {
+      const score = await getMetricScore(metric, context);
+      metrics[metric] = score;
+      // Reset failure count on success
+      apiFailureCount = 0;
+    } catch (error) {
+      console.error(`Failed to get score for ${metric}:`, error);
+      apiFailureCount++;
+
+      // Switch to fallback if we've had too many failures
+      if (apiFailureCount >= maxFailuresBeforeFallback) {
+        console.log('Too many API failures, switching to fallback scoring');
+        useFallback = true;
+        // Calculate this metric with fallback
+        metrics[metric] = calculateFallbackScore(metric, answers);
+      } else {
+        // Still use the default fallback for this metric
+        metrics[metric] = 50;
+      }
+    }
   }
-  const activityScale = Number(a[13] || 1);
-  const activityPoints = ((activityScale - 1) / 9) * 30;
-  let addictionDeduction = 0;
-  if (quizQuestions[7].options?.indexOf(String(a[8])) === 4)
-    addictionDeduction = 0;
-  else if (quizQuestions[7].options?.indexOf(String(a[8])) === 5)
-    addictionDeduction = -25;
-  else addictionDeduction = -15;
-  const wellBeing = Number(a[10] || 1);
-  const wellBeingPoints = ((wellBeing - 1) / 9) * 15;
-  metrics.strength = clamp(
-    sleepPoints +
-      activityPoints +
-      wellBeingPoints +
-      100 +
-      addictionDeduction -
-      100,
-    0,
-    100
-  );
 
-  // --- Focus ---
-  const focusWellBeingPoints = ((wellBeing - 1) / 9) * 35;
-  const stressIdx = quizQuestions[10].options?.indexOf(String(a[11])) ?? 0;
-  const stressPoints = [35, 25, 15, 5][stressIdx] ?? 0;
-  const proudIdx = quizQuestions[5].options?.indexOf(String(a[6])) ?? 0;
-  const proudPoints = [30, 25, 20, 10, 5][proudIdx] ?? 0;
-  metrics.focus = clamp(
-    focusWellBeingPoints + stressPoints + proudPoints,
-    0,
-    100
-  );
-
-  // --- Confidence ---
-  const confProudPoints = [25, 20, 15, 10, 5][proudIdx] ?? 0;
-  const confWellBeingPoints = ((wellBeing - 1) / 9) * 25;
-  const support = Number(a[16] || 1);
-  const supportPoints = ((support - 1) / 9) * 30;
-  const selfCareIdx = quizQuestions[14].options?.indexOf(String(a[15])) ?? 0;
-  const selfCarePoints = [5, 10, 15, 20][selfCareIdx] ?? 0;
-  metrics.confidence = clamp(
-    confProudPoints + confWellBeingPoints + supportPoints + selfCarePoints,
-    0,
-    100
-  );
-
-  // --- Discipline ---
-  let disciplineAddictionDeduction = 0;
-  if (quizQuestions[7].options?.indexOf(String(a[8])) === 4)
-    disciplineAddictionDeduction = 0;
-  else if (quizQuestions[7].options?.indexOf(String(a[8])) === 5)
-    disciplineAddictionDeduction = -35;
-  else disciplineAddictionDeduction = -15;
-  const disciplineSelfCarePoints = [5, 10, 15, 25][selfCareIdx] ?? 0;
-  const disciplineActivityPoints = ((activityScale - 1) / 9) * 20;
-  let disciplineSleepPoints = 0;
-  switch (quizQuestions[11].options?.indexOf(String(a[12]))) {
-    case 2:
-      disciplineSleepPoints = 20;
-      break;
-    case 3:
-      disciplineSleepPoints = 15;
-      break;
-    case 1:
-      disciplineSleepPoints = 15;
-      break;
-    case 0:
-      disciplineSleepPoints = 5;
-      break;
-    default:
-      disciplineSleepPoints = 0;
-  }
-  metrics.discipline = clamp(
-    disciplineSelfCarePoints +
-      disciplineActivityPoints +
-      disciplineSleepPoints +
-      100 +
-      disciplineAddictionDeduction -
-      100,
-    0,
-    100
-  );
-
-  for (const k in metrics) metrics[k] = clamp(metrics[k], 0, 100);
   return metrics;
 }
 
@@ -170,19 +237,63 @@ export default function ResultsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { userData, isLoading, updateSubscription } = useGlobal();
-  const [metrics, setMetrics] = useState<Record<string, number> | null>(null);
+  const [metrics, setMetrics] = useState<Record<MetricKey, number> | null>(
+    null
+  );
   const [loadingMetrics, setLoadingMetrics] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Define calculate function for retry button
+  const calculate = async () => {
+    if (!userData?.quiz?.answers) {
+      setError('No quiz data found. Please complete the quiz first.');
+      return;
+    }
+
+    console.log('🔄 Manual retry of metrics calculation');
+    setLoadingMetrics(true);
+    setError(null);
+
+    try {
+      console.time('Metrics calculation (retry)');
+      const m = await computeMetrics(userData.quiz.answers);
+      console.timeEnd('Metrics calculation (retry)');
+      setMetrics(m);
+    } catch (err) {
+      console.error('❌ Error calculating metrics on retry:', err);
+      setError('Failed to calculate your metrics. Please try again later.');
+    } finally {
+      setLoadingMetrics(false);
+    }
+  };
 
   useEffect(() => {
-    async function calculate() {
+    async function calculateInitial() {
       if (userData?.quiz?.answers) {
+        console.log('🔄 Starting metrics calculation in useEffect');
         setLoadingMetrics(true);
-        const m = await computeMetrics(userData.quiz.answers);
-        setMetrics(m);
+        setError(null);
+
+        try {
+          console.time('Metrics calculation');
+          const m = await computeMetrics(userData.quiz.answers);
+          console.timeEnd('Metrics calculation');
+
+          console.log('📊 Setting metrics state with calculated values');
+          setMetrics(m);
+        } catch (err) {
+          console.error('❌ Error calculating metrics:', err);
+          setError('Failed to calculate your metrics. Please try again.');
+        } finally {
+          setLoadingMetrics(false);
+        }
+      } else {
+        console.warn('⚠️ No quiz answers available in userData');
+        setError('No quiz data found. Please complete the quiz first.');
         setLoadingMetrics(false);
       }
     }
-    calculate();
+    calculateInitial();
   }, [userData]);
 
   const handleSubscribe = async () => {
@@ -190,12 +301,34 @@ export default function ResultsScreen() {
     router.replace('/plan');
   };
 
-  if (isLoading || !userData || loadingMetrics || !metrics) {
+  if (isLoading || !userData) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <Text style={styles.loadingText}>Loading your assessment data...</Text>
+      </View>
+    );
+  }
+
+  if (loadingMetrics) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <Text style={styles.loadingText}>
           Computing your personalized scores...
         </Text>
+        <Text style={styles.loadingSubtext}>
+          This may take a moment as we analyze your responses.
+        </Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <Text style={styles.errorText}>{error}</Text>
+        <Pressable style={styles.retryButton} onPress={calculate}>
+          <Text style={styles.retryButtonText}>Try Again</Text>
+        </Pressable>
       </View>
     );
   }
@@ -210,16 +343,17 @@ export default function ResultsScreen() {
         <Text style={styles.title}>Your Assessment Results</Text>
         <Text style={styles.subtitle}>Here are your key life metrics</Text>
         <View style={{ marginBottom: 30 }}>
-          {Object.entries(metrics).map(([key, value]) => (
-            <View key={key} style={styles.resultCard}>
-              <Text style={styles.question}>
-                {key.charAt(0).toUpperCase() + key.slice(1)}
-              </Text>
-              <Text style={styles.answer}>
-                {Math.round(Number(value))} / 100
-              </Text>
-            </View>
-          ))}
+          {metrics &&
+            Object.entries(metrics).map(([key, value]) => (
+              <View key={key} style={styles.resultCard}>
+                <Text style={styles.question}>
+                  {key.charAt(0).toUpperCase() + key.slice(1)}
+                </Text>
+                <Text style={styles.answer}>
+                  {Math.round(Number(value))} / 100
+                </Text>
+              </View>
+            ))}
         </View>
         <View style={styles.ctaContainer}>
           <Text style={styles.ctaTitle}>Ready to start your journey?</Text>
@@ -251,6 +385,13 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     textAlign: 'center',
+  },
+  loadingSubtext: {
+    color: '#ffffff',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    opacity: 0.8,
   },
   title: {
     fontSize: 32,
@@ -311,6 +452,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ctaButtonText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  errorText: {
+    color: '#ff0000',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#007AFF',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  retryButtonText: {
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '600',
