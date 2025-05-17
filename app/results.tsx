@@ -295,12 +295,7 @@ async function computeMetrics(
       async (metricKey) => {
         const metric = metricKey as MetricKey;
         try {
-          const score = await getMetricScore(
-            metric,
-            context,
-            quizAnswers,
-            habitsAnswers
-          );
+          const score = await getMetricScore(metric, context);
           return { metric, score };
         } catch (error) {
           console.warn(
@@ -591,7 +586,7 @@ export default function ResultsScreen() {
     // Calculate overall score as average of all metrics
     const overallScore = Math.round(
       Object.values(metrics).reduce((sum, value) => sum + value, 0) /
-      Object.keys(metrics).length
+        Object.keys(metrics).length
     );
 
     return (
@@ -601,8 +596,8 @@ export default function ResultsScreen() {
           <View style={styles.resultsContainer}>
             <Text style={styles.resultsTitle}>Your Rating</Text>
             <Text style={styles.resultsSubtitle}>
-              Based on your answers, this is your current rating, which
-              reflects your lifestyle and habits now.
+              Based on your answers, this is your current rating, which reflects
+              your lifestyle and habits now.
             </Text>
 
             {/* Overall score card */}
