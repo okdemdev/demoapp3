@@ -79,11 +79,14 @@ export default function WelcomeScreen() {
     setTypingComplete(false);
 
     const typeChar = () => {
-      if (index < text.length) {
-        setDisplayedText(current => current + text.charAt(index));
+      if (index <= text.length) {
+        // Use slice instead of appending to avoid missing characters
+        setDisplayedText(text.slice(0, index));
+
         // Trigger haptic feedback
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
           .catch(() => { }); // Ignore errors
+
         index++;
         typingTimerRef.current = setTimeout(typeChar, 70) as any;
       } else {
