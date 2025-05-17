@@ -10,6 +10,10 @@ export interface GlobalData {
       [key: number]: string; // questionId -> AI generated insight
     };
   };
+  subscription?: {
+    subscribedAt: string;
+    active: boolean;
+  };
 }
 
 interface GlobalContextType {
@@ -20,6 +24,7 @@ interface GlobalContextType {
     answer: string | number
   ) => Promise<void>;
   updateQuizInsight: (questionId: number, insight: string) => Promise<void>;
+  updateSubscription: (active: boolean) => Promise<void>;
   clearUserData: () => Promise<void>;
 }
 
@@ -101,6 +106,19 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const updateSubscription = async (active: boolean) => {
+    setUserData((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        subscription: {
+          subscribedAt: new Date().toISOString(),
+          active,
+        },
+      };
+    });
+  };
+
   const clearUserData = async () => {
     setUserData(null);
   };
@@ -112,6 +130,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         updateQuizAnswer,
         updateQuizInsight,
+        updateSubscription,
         clearUserData,
       }}
     >

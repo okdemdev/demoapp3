@@ -8,7 +8,12 @@ import quizQuestions from './lib/quizQuestions';
 export default function ResultsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { userData, isLoading } = useGlobal();
+  const { userData, isLoading, updateSubscription } = useGlobal();
+
+  const handleSubscribe = async () => {
+    await updateSubscription(true);
+    router.replace('/plan');
+  };
 
   const getAnswerText = (answer: {
     questionId: number;
@@ -128,7 +133,7 @@ export default function ResultsScreen() {
             Get personalized guidance and a custom plan to improve your
             well-being
           </Text>
-          <Pressable style={styles.ctaButton}>
+          <Pressable style={styles.ctaButton} onPress={handleSubscribe}>
             <Text style={styles.ctaButtonText}>Subscribe Now</Text>
           </Pressable>
         </View>
