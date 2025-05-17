@@ -29,7 +29,14 @@ export const quizQuestions: QuizQuestion[] = [
     id: 1,
     question: 'How old are you?',
     type: 'multiple_choice',
-    options: ['13 to 17', '18 to 24', '25 to 34', '35 to 44', '45 to 54', '55 or above'],
+    options: [
+      '13 to 17',
+      '18 to 24',
+      '25 to 34',
+      '35 to 44',
+      '45 to 54',
+      '55 or above',
+    ],
   },
   {
     id: 2,
@@ -42,11 +49,11 @@ export const quizQuestions: QuizQuestion[] = [
     question: 'How would you describe your current life?',
     type: 'multiple_choice',
     options: [
-      'I\'m satisfied with my life now',
-      'I\'m alright and want to self-improve',
-      'I\'m doing okay, not good or bad',
-      'I\'m often sad and rarely happy',
-      'I\'m at the lowest and need help'
+      "I'm satisfied with my life now",
+      "I'm alright and want to self-improve",
+      "I'm doing okay, not good or bad",
+      "I'm often sad and rarely happy",
+      "I'm at the lowest and need help",
     ],
     emojis: ['😊', '🙂', '👌', '😔', '😞'],
   },
@@ -60,7 +67,7 @@ export const quizQuestions: QuizQuestion[] = [
       'Improve physical health and look',
       'Fix my broken mental health',
       'Overcome major life setbacks',
-      'Win back my failed life'
+      'Win back my failed life',
     ],
     emojis: ['🛏️', '📚', '💪', '❤️‍🩹', '💔', '🏔️'],
   },
@@ -71,24 +78,30 @@ export const quizQuestions: QuizQuestion[] = [
     messageType: 'testimonial',
     messageContent: {
       emoji: '🙌',
-      title: 'After 66 days, you\'ll overcome the setback.',
+      title: "After 66 days, you'll overcome the setback.",
       text: [
         'The average Rise male members between 13 to 17 years old showed',
         '315% improvement in physical, mental well-being and focus',
-        'after joining Rise.'
+        'after joining Rise.',
       ],
       testimonial: {
         name: 'Liam',
         age: 16,
-        text: 'Rise has been a game-changer for me. It\'s helped me stay focused on my goals and build better habits, even with school and sports. I feel more confident and organized every day.'
-      }
-    }
+        text: "Rise has been a game-changer for me. It's helped me stay focused on my goals and build better habits, even with school and sports. I feel more confident and organized every day.",
+      },
+    },
   },
   {
     id: 6,
-    question: 'What\'s the last time you were proud of yourself?',
+    question: "What's the last time you were proud of yourself?",
     type: 'multiple_choice',
-    options: ['Just today', 'Few days ago', 'Few weeks ago', 'Few months ago', 'Too long I can\'t remember'],
+    options: [
+      'Just today',
+      'Few days ago',
+      'Few weeks ago',
+      'Few months ago',
+      "Too long I can't remember",
+    ],
   },
   {
     id: 7,
@@ -99,15 +112,22 @@ export const quizQuestions: QuizQuestion[] = [
       'To not get fired or expelled',
       'To provide for my family',
       'Achieve my goals and dreams',
-      'I don\'t really know',
-      'None of the above'
+      "I don't really know",
+      'None of the above',
     ],
   },
   {
     id: 8,
     question: 'Would you say you are addicted to any one of the below?',
     type: 'multiple_choice',
-    options: ['Smoking', 'Vaping', 'Fap', 'Alcohol', 'None of the above', 'More than one of the above'],
+    options: [
+      'Smoking',
+      'Vaping',
+      'Fap',
+      'Alcohol',
+      'None of the above',
+      'More than one of the above',
+    ],
   },
   {
     id: 9,
@@ -115,13 +135,13 @@ export const quizQuestions: QuizQuestion[] = [
     question: '',
     messageType: 'encouragement',
     messageContent: {
-      title: 'I\'m proud of you for wanting to make changes.',
+      title: "I'm proud of you for wanting to make changes.",
       emoji: '🔥',
       text: [
         'The first step is always to face your problems.',
-        'Let\'s understand more about your challenges from a scientific way, and see how our life reset program can help.'
-      ]
-    }
+        "Let's understand more about your challenges from a scientific way, and see how our life reset program can help.",
+      ],
+    },
   },
   {
     id: 10,
