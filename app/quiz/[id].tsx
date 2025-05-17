@@ -8,7 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import NoteIcon from '../assets/note-icon';
@@ -26,15 +26,17 @@ export default function QuizScreen() {
 
   // Check if we're on the intro page (id=0)
   const isIntroPage = questionId === 0;
+  // Check if we're on a message screen
+  const isMessageScreen = question?.type === 'message';
 
   useEffect(() => {
-    // Skip loading previous answer on intro page
-    if (!isIntroPage) {
+    // Skip loading previous answer on intro page or message screens
+    if (!isIntroPage && !isMessageScreen) {
       loadPreviousAnswer();
     } else {
       setIsLoading(false);
     }
-  }, [isIntroPage]);
+  }, [isIntroPage, isMessageScreen, questionId]);
 
   const loadPreviousAnswer = async () => {
     const quizData = await getQuizData();
@@ -44,6 +46,8 @@ export default function QuizScreen() {
       );
       if (previousAnswer) {
         setAnswer(previousAnswer.answer);
+      } else {
+        setAnswer(''); // Reset answer when moving to a new question
       }
     }
     setIsLoading(false);
@@ -64,13 +68,25 @@ export default function QuizScreen() {
       return;
     }
 
-    if (answer !== '') {
-      await saveQuizAnswer(questionId, answer);
+    if (isMessageScreen || answer !== '') {
+      if (!isMessageScreen) {
+        await saveQuizAnswer(questionId, answer);
+      }
+
       if (questionId < quizQuestions.length) {
         router.push(`/quiz/${questionId + 1}`);
       } else {
         router.push('/results');
       }
+    }
+  };
+
+  const handleBack = () => {
+    if (questionId > 1) {
+      router.push(`/quiz/${questionId - 1}`);
+    } else {
+      // Go back to intro if on first question
+      router.push('/quiz/0');
     }
   };
 
@@ -95,8 +111,55 @@ export default function QuizScreen() {
     );
   };
 
+  // Render message screens (testimonial, encouragement, etc.)
+  const renderMessageScreen = () => {
+    if (!question?.messageContent) return null;
+
+    const { title, text, emoji, testimonial } = question.messageContent;
+
+    return (
+      <View style={styles.messageContainer}>
+        {emoji && (
+          <Text style={styles.messageEmoji}>{emoji}</Text>
+        )}
+
+        {title && (
+          <Text style={styles.messageTitle}>{title}</Text>
+        )}
+
+        {text && text.map((line, index) => (
+          <Text
+            key={index}
+            style={[
+              styles.messageText,
+              index === 1 && line.includes('315%') ? styles.highlightedText : {}
+            ]}
+          >
+            {line}
+          </Text>
+        ))}
+
+        {testimonial && (
+          <View style={styles.testimonialCard}>
+            <Text style={styles.testimonialName}>
+              {testimonial.name}, {testimonial.age}
+            </Text>
+            <Text style={styles.testimonialText}>{testimonial.text}</Text>
+            <View style={styles.ratingContainer}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Text key={star} style={styles.starRating}>⭐</Text>
+              ))}
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderQuestionInput = () => {
-    switch (question?.type) {
+    if (!question) return null;
+
+    switch (question.type) {
       case 'scale':
         return (
           <View style={styles.scaleContainer}>
@@ -107,8 +170,9 @@ export default function QuizScreen() {
               step={1}
               value={Number(answer) || question.scaleRange?.min || 1}
               onValueChange={(value) => setAnswer(value)}
-              minimumTrackTintColor="#007AFF"
-              maximumTrackTintColor="#000000"
+              minimumTrackTintColor="#ff7300"
+              maximumTrackTintColor="#333"
+              thumbTintColor="#ff7300"
             />
             <View style={styles.scaleLabels}>
               <Text style={styles.scaleLabel}>
@@ -135,6 +199,9 @@ export default function QuizScreen() {
                 ]}
                 onPress={() => setAnswer(option)}
               >
+                {question.emojis && question.emojis[index] && (
+                  <Text style={styles.optionEmoji}>{question.emojis[index]} </Text>
+                )}
                 <Text
                   style={[
                     styles.optionText,
@@ -167,7 +234,14 @@ export default function QuizScreen() {
   // Calculate progress percentage for the progress bar
   const calculateProgress = () => {
     if (isIntroPage) return 0;
-    return (questionId / quizQuestions.length) * 100;
+
+    // Count regular questions only (not messages)
+    const totalQuestions = quizQuestions.filter(q => q.type !== 'message').length;
+    const questionsBefore = quizQuestions
+      .filter(q => q.id < questionId && q.type !== 'message')
+      .length;
+
+    return (questionsBefore / totalQuestions) * 100;
   };
 
   return (
@@ -184,17 +258,29 @@ export default function QuizScreen() {
         />
       </View>
 
+      {/* Back Button - only show if not on intro */}
+      {!isIntroPage && (
+        <Pressable
+          style={styles.backButton}
+          onPress={handleBack}
+        >
+          <Text style={styles.backButtonText}>←</Text>
+        </Pressable>
+      )}
+
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          (isIntroPage || isMessageScreen) && styles.centeredContent
+        ]}
       >
         {isIntroPage ? (
           renderIntroPage()
+        ) : isMessageScreen ? (
+          renderMessageScreen()
         ) : (
           <>
-            <Text style={styles.progress}>
-              Question {questionId} of {quizQuestions.length}
-            </Text>
             <Text style={styles.question}>{question?.question}</Text>
             {renderQuestionInput()}
           </>
@@ -205,17 +291,19 @@ export default function QuizScreen() {
         <Pressable
           style={[
             styles.nextButton,
-            isIntroPage ? {} : (!answer && styles.nextButtonDisabled)
+            !isMessageScreen && !isIntroPage && !answer ? styles.nextButtonDisabled : {}
           ]}
           onPress={handleNext}
-          disabled={!isIntroPage && !answer}
+          disabled={!isMessageScreen && !isIntroPage && !answer}
         >
           <Text style={styles.nextButtonText}>
             {isIntroPage
               ? 'Got it'
               : questionId === quizQuestions.length
                 ? 'Finish'
-                : 'Next'
+                : isMessageScreen
+                  ? 'Continue'
+                  : 'Next'
             }
           </Text>
         </Pressable>
@@ -227,7 +315,7 @@ export default function QuizScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#111',
   },
   progressBarContainer: {
     height: 4,
@@ -238,30 +326,43 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#ff7300',
   },
+  backButton: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backButtonText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 20,
+    paddingTop: 60,
+  },
+  centeredContent: {
     flexGrow: 1,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingText: {
     color: '#ffffff',
     fontSize: 16,
     textAlign: 'center',
   },
-  progress: {
-    color: '#ffffff',
-    fontSize: 14,
-    marginBottom: 20,
-    opacity: 0.7,
-  },
   question: {
     color: '#ffffff',
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '600',
-    marginBottom: 30,
+    marginBottom: 40,
   },
   introContainer: {
     alignItems: 'center',
@@ -279,11 +380,65 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     textAlign: 'center',
-    marginBottom: 20,
+    marginTop: 20,
+  },
+  messageContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  messageEmoji: {
+    fontSize: 48,
+    marginBottom: 30,
+  },
+  messageTitle: {
+    color: '#ffffff',
+    fontSize: 32,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 30,
+  },
+  messageText: {
+    color: '#ffffff',
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  highlightedText: {
+    color: '#ff7300',
+    fontWeight: 'bold',
+  },
+  testimonialCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    marginTop: 30,
+    alignItems: 'center',
+  },
+  testimonialName: {
+    color: '#000',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  testimonialText: {
+    color: '#333',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+  },
+  starRating: {
+    fontSize: 18,
+    marginHorizontal: 2,
   },
   scaleContainer: {
     alignItems: 'center',
     marginBottom: 20,
+    width: '100%',
   },
   slider: {
     width: '100%',
@@ -302,31 +457,39 @@ const styles = StyleSheet.create({
   },
   scaleValue: {
     color: '#ffffff',
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: '600',
-    marginTop: 10,
+    marginTop: 20,
   },
   optionsContainer: {
-    gap: 10,
+    gap: 16,
+    width: '100%',
   },
   optionButton: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#fff',
     padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#3a3a3a',
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   optionButtonSelected: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: '#ff7300',
+    borderColor: '#ff7300',
   },
   optionText: {
-    color: '#ffffff',
+    color: '#000',
     fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   optionTextSelected: {
-    color: '#ffffff',
+    color: '#fff',
     fontWeight: '600',
+  },
+  optionEmoji: {
+    fontSize: 20,
+    marginRight: 4,
   },
   textInput: {
     backgroundColor: '#2a2a2a',
@@ -340,7 +503,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     padding: 20,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#111',
     borderTopWidth: 1,
     borderTopColor: '#2a2a2a',
   },

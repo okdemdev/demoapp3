@@ -1,5 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { QuizAnswer, getQuizData, saveQuizAnswer } from '../quizStorage';
+import {
+  clearSubscription,
+  getSubscription,
+  saveSubscription,
+} from '../subscriptionStorage';
 
 // Define all possible data types that can be stored
 export interface GlobalData {
@@ -42,15 +47,16 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   const loadUserData = async () => {
     try {
       const quizData = await getQuizData();
-      if (quizData) {
-        setUserData({
-          quiz: {
-            answers: quizData.answers,
-            completed: quizData.completed,
-            insights: {},
-          },
-        });
-      }
+      const subscriptionData = await getSubscription();
+
+      setUserData({
+        quiz: {
+          answers: quizData?.answers || [],
+          completed: quizData?.completed || false,
+          insights: {},
+        },
+        subscription: subscriptionData || undefined,
+      });
     } catch (error) {
       console.error('Error loading user data:', error);
     } finally {
@@ -107,20 +113,30 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateSubscription = async (active: boolean) => {
-    setUserData((prev) => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        subscription: {
-          subscribedAt: new Date().toISOString(),
-          active,
-        },
-      };
-    });
+    try {
+      await saveSubscription(active);
+      setUserData((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          subscription: {
+            subscribedAt: new Date().toISOString(),
+            active,
+          },
+        };
+      });
+    } catch (error) {
+      console.error('Error updating subscription:', error);
+    }
   };
 
   const clearUserData = async () => {
-    setUserData(null);
+    try {
+      await clearSubscription();
+      setUserData(null);
+    } catch (error) {
+      console.error('Error clearing user data:', error);
+    }
   };
 
   return (
