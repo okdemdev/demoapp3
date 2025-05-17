@@ -71,7 +71,7 @@ class OpenAIService {
 
         const response = await this.openai.chat.completions.create(
           {
-            model: 'gpt-4.1',
+            model: 'gpt-4.1-mini',
             messages,
             temperature: 0.5, // Lower temperature for more deterministic responses
           },
