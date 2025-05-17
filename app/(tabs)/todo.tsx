@@ -1,14 +1,15 @@
-import { FontAwesome } from '@expo/vector-icons';
+import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Modal,
   PanResponder,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGlobal } from '../lib/context/GlobalContext';
@@ -31,8 +32,8 @@ interface Task {
   image?: any; // Image source for the task
 }
 
-// Type for FontAwesome icons we're using
-type TaskIcon = 'book' | 'heartbeat' | 'bullseye' | 'trophy' | 'clock-o' | 'check-circle' | 'hand-o-left';
+// Define a type for FontAwesome icons we're using
+type FontAwesomeIconType = 'book' | 'heartbeat' | 'bullseye' | 'trophy' | 'clock-o' | 'check-circle' | 'times-circle' | 'hand-o-left' | 'check' | 'times' | 'star' | 'bar-chart' | 'line-chart' | 'arrow-up';
 
 export default function TodoScreen() {
   const insets = useSafeAreaInsets();
@@ -55,6 +56,10 @@ export default function TodoScreen() {
     confidence: 0,
     discipline: 0,
   });
+
+  // Add this for stats modal animation
+  const [showStatsModal, setShowStatsModal] = useState(false);
+  const modalAnimation = useRef(new Animated.Value(-1000)).current;
 
   // Define refs at the top level of the component
   const isInitialRender = useRef(true);
@@ -107,6 +112,24 @@ export default function TodoScreen() {
       setAfterStats({ ...userData.metrics });
     }
   }, [userData?.metrics]);
+
+  // Add animation for modal
+  useEffect(() => {
+    if (showStatsModal) {
+      Animated.spring(modalAnimation, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 20,
+        friction: 7,
+      }).start();
+    } else {
+      Animated.timing(modalAnimation, {
+        toValue: -1000,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showStatsModal]);
 
   // Load current day information
   const loadDayInfo = async () => {
@@ -325,7 +348,7 @@ export default function TodoScreen() {
     }
   };
 
-  // Task Card Component - completely revised to ensure proper rendering
+  // Task Card Component with swipe functionality
   const TaskCard = ({ task }: { task: Task }) => {
     console.log(`Rendering task ${task.id}: ${task.completed ? 'COMPLETED' : 'PENDING'}`);
 
@@ -418,7 +441,11 @@ export default function TodoScreen() {
           <View style={styles.taskImageContainer}>
             {/* Task Icon */}
             <View style={styles.taskIcon}>
-              <FontAwesome name={getIconForMetric(task.metric) as TaskIcon} size={24} color="#fff" />
+              <FontAwesome
+                name={getFontAwesomeIconForMetric(task.metric)}
+                size={24}
+                color="#fff"
+              />
             </View>
 
             <Text style={styles.taskTitle}>{task.title}</Text>
@@ -478,8 +505,8 @@ export default function TodoScreen() {
     );
   };
 
-  // Helper to get icon name based on metric
-  const getIconForMetric = (metric: MetricKey): TaskIcon => {
+  // Helper to get FontAwesome icon name for metric (in TaskCard)
+  const getFontAwesomeIconForMetric = (metric: MetricKey): FontAwesomeIconType => {
     switch (metric) {
       case 'wisdom': return 'book';
       case 'strength': return 'heartbeat';
@@ -490,10 +517,125 @@ export default function TodoScreen() {
     }
   };
 
+  // Helper to get Ionicons name for metric (in Modal)
+  const getIoniconsForMetric = (metric: MetricKey): any => {
+    const icons: Record<MetricKey, string> = {
+      wisdom: 'brain-outline',
+      strength: 'barbell-outline',
+      focus: 'eye-outline',
+      confidence: 'sunny-outline',
+      discipline: 'time-outline',
+    };
+    return icons[metric];
+  };
+
   // Count completed and skipped tasks
   const completedCount = tasks.filter(t => t.completed).length;
   const skippedCount = tasks.filter(t => t.skipped).length;
   const pendingCount = tasks.length - completedCount - skippedCount;
+
+  // Function to calculate overall score
+  const calculateOverall = (metrics: Record<MetricKey, number> | undefined) => {
+    if (!metrics) return 0;
+
+    return Math.round(
+      Object.values(metrics).reduce((sum, value) => sum + value, 0) /
+      Object.keys(metrics).length
+    );
+  };
+
+  // Getting current and before overall scores
+  const currentOverall = calculateOverall(afterStats);
+  const beforeOverall = calculateOverall(beforeStats);
+  const overallImprovement = currentOverall - beforeOverall;
+
+  // Render the Statistics Modal
+  const renderStatsModal = () => {
+    return (
+      <Modal
+        transparent={true}
+        visible={showStatsModal}
+        animationType="none"
+        onRequestClose={() => setShowStatsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Animated.View
+            style={[
+              styles.modalContainer,
+              { transform: [{ translateY: modalAnimation }] }
+            ]}
+          >
+            <TouchableOpacity
+              onPress={() => setShowStatsModal(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+
+            <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
+              <Text style={styles.modalSubtitle}>
+                Today's metrics show your progress after completing tasks
+              </Text>
+
+              {/* Overall score card */}
+              <View style={styles.overallScoreCard}>
+                <View style={styles.scoreHeader}>
+                  <Ionicons name="star" size={24} color="#fff" />
+                  <Text style={styles.scoreLabel}>Overall</Text>
+                </View>
+                <Text style={styles.overallScoreValue}>{currentOverall}</Text>
+                <View style={styles.scoreBarContainer}>
+                  <View
+                    style={[
+                      styles.scoreBar,
+                      { width: `${Math.min(100, currentOverall)}%` },
+                    ]}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.sectionTitle}>
+                Today's Impact
+              </Text>
+
+              {/* Individual metrics cards */}
+              <View style={styles.metricsGrid}>
+                {Object.entries(afterStats).map(([key, value]) => {
+                  const metricKey = key as MetricKey;
+                  const beforeValue = beforeStats[metricKey];
+                  const improvement = value - beforeValue;
+
+                  return (
+                    <View key={key} style={styles.metricCard}>
+                      <View style={styles.metricHeader}>
+                        <Ionicons
+                          name={getIoniconsForMetric(metricKey)}
+                          size={24}
+                          color="#000"
+                        />
+                        <Text style={styles.metricLabel}>
+                          {key.charAt(0).toUpperCase() + key.slice(1)}
+                        </Text>
+                      </View>
+                      <Text style={styles.metricValue}>{Math.round(value)}</Text>
+                      <View style={styles.metricBarContainer}>
+                        <View
+                          style={[
+                            styles.metricBar,
+                            { width: `${Math.min(100, value)}%` },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </Animated.View>
+        </View>
+      </Modal>
+    );
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -525,8 +667,6 @@ export default function TodoScreen() {
         </View>
       </View>
 
-
-
       {/* Task Cards */}
       <ScrollView style={styles.tasksContainer}>
         {tasks.map(task => (
@@ -550,29 +690,25 @@ export default function TodoScreen() {
           </View>
         )}
 
-        {/* If all tasks are completed or skipped */}
+        {/* Space at the bottom when all tasks are completed */}
         {tasks.length > 0 && tasks.every(t => t.completed || t.skipped) && (
-          <View style={styles.allDoneContainer}>
-            <Text style={styles.allDoneText}>All tasks completed for today!</Text>
-            <TouchableOpacity
-              style={styles.generateButton}
-              onPress={generateDailyTasks}
-            >
-              <Text style={styles.generateButtonText}>Generate New Tasks</Text>
-            </TouchableOpacity>
-          </View>
+          <View style={{ height: 20 }} />
         )}
       </ScrollView>
 
-      {/* Stats Button */}
-      <TouchableOpacity
-        style={styles.statsButton}
-        onPress={() => setShowStats(!showStats)}
-      >
-        <Text style={styles.statsButtonText}>
-          {showStats ? 'Hide Stats' : 'Show Stats'}
-        </Text>
-      </TouchableOpacity>
+      {/* Stats Button - only show when all tasks are completed */}
+      {tasks.length > 0 && tasks.every(t => t.completed || t.skipped) && (
+        <TouchableOpacity
+          style={styles.statsButton}
+          onPress={() => setShowStatsModal(true)}
+        >
+          <Text style={styles.statsButtonText}>Today's Gains</Text>
+          <Ionicons name="stats-chart" size={20} color="#fff" style={styles.statsButtonIcon} />
+        </TouchableOpacity>
+      )}
+
+      {/* Render the modal */}
+      {renderStatsModal()}
 
       {/* Stats Panel */}
       {showStats && (
@@ -796,16 +932,28 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   statsButton: {
-    backgroundColor: '#4a90e2',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 30,
+    backgroundColor: '#F37335',
+    paddingVertical: 18,
+    borderRadius: 12,
     alignSelf: 'center',
-    marginTop: 20,
+    marginVertical: 20,
+    width: '90%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   statsButtonText: {
     color: '#fff',
+    fontSize: 20,
     fontWeight: 'bold',
+  },
+  statsButtonIcon: {
+    marginLeft: 10,
   },
   statsPanel: {
     backgroundColor: '#222',
@@ -891,5 +1039,180 @@ const styles = StyleSheet.create({
     color: '#ccc',
     opacity: 0.9,
   },
-
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-start',
+  },
+  modalContainer: {
+    backgroundColor: '#111',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    height: '75%',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  closeButton: {
+    alignSelf: 'flex-end',
+    padding: 8,
+    marginBottom: 10,
+  },
+  modalScroll: {
+    flex: 1,
+  },
+  modalScrollContent: {
+    paddingBottom: 20,
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: '#aaa',
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  overallScoreCard: {
+    backgroundColor: '#F37335',
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 10,
+  },
+  scoreHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  scoreLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginLeft: 8,
+  },
+  overallScoreValue: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  scoreValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginBottom: 8,
+  },
+  scoreValue: {
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  improvement: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+    marginLeft: 8,
+    marginBottom: 8,
+  },
+  scoreBarContainer: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  scoreBar: {
+    height: '100%',
+    backgroundColor: '#fff',
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  metricCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    width: '48%',
+  },
+  metricHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  metricLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
+    marginLeft: 8,
+  },
+  metricValue: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 8,
+  },
+  metricBarContainer: {
+    height: 6,
+    backgroundColor: '#E5E5E5',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  metricBar: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+  },
+  scoreCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statsInfoBox: {
+    backgroundColor: '#222',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  statsInfoTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 12,
+  },
+  statsInfoText: {
+    fontSize: 14,
+    color: '#ccc',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  statsTipsList: {
+    marginTop: 8,
+  },
+  statsTipItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  statsTipText: {
+    fontSize: 14,
+    color: '#ccc',
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 20,
+  },
 });
