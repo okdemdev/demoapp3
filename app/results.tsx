@@ -5,6 +5,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 import { useGlobal } from './lib/context/GlobalContext';
+import { habitsQuestions } from './lib/habitsQuestions';
+import { HabitsAnswer } from './lib/habitsStorage';
 import quizQuestions from './lib/quizQuestions';
 import { QuizAnswer } from './lib/quizStorage';
 import OpenAIService from './lib/services/OpenAIService';
@@ -35,28 +37,51 @@ const scoreSchema = z.preprocess((val) => {
   return isNaN(parsed) ? null : parsed;
 }, z.number().min(0).max(100).int()) as z.ZodType<number>;
 
-function buildContextString(answers: QuizAnswer[]): string {
-  return quizQuestions
+// Build context string with both quiz and habits answers
+function buildContextString(quizAnswers: QuizAnswer[], habitsAnswers: HabitsAnswer[]): string {
+  const quizContext = quizQuestions
     .filter((q) => q.type !== 'message')
     .map((q) => {
       const userAnswer =
-        answers.find((a) => a.questionId === q.id)?.answer ?? '[No answer]';
-      return `Q${q.id}: ${q.question} — ${userAnswer}`;
+        quizAnswers.find((a) => a.questionId === q.id)?.answer ?? '[No answer]';
+      return `Quiz Q${q.id}: ${q.question} — ${userAnswer}`;
     })
     .join('\n');
+
+  const habitsContext = habitsQuestions
+    .map((q) => {
+      const userAnswer = habitsAnswers.find((a) => a.questionId === q.id)?.answer;
+
+      // Get the label for slider answers instead of just the number
+      let displayAnswer = '[No answer]';
+      if (userAnswer !== undefined) {
+        if (typeof userAnswer === 'number' && q.sliderOptions?.labels) {
+          const index = Math.max(0, Math.min(q.sliderOptions.labels.length - 1, userAnswer - 1));
+          displayAnswer = q.sliderOptions.labels[index];
+        } else {
+          displayAnswer = String(userAnswer);
+        }
+      }
+
+      return `Habits Q${q.id}: ${q.question} — ${displayAnswer}`;
+    })
+    .join('\n');
+
+  return `${quizContext}\n\n${habitsContext}`;
 }
 
 async function getMetricScore(
   metric: MetricKey,
   context: string,
-  answers: QuizAnswer[]
+  quizAnswers: QuizAnswer[],
+  habitsAnswers: HabitsAnswer[]
 ): Promise<number> {
   const openai = OpenAIService.getInstance();
 
   const scoringCriteria = getScoringCriteria(metric);
 
   const prompt = `
-Rate the person's "${metric}" on a scale from 0 to 100 based on their quiz answers.
+Rate the person's "${metric}" on a scale from 0 to 100 based on their quiz and habits assessment answers.
 
 ${METRIC_DESCRIPTIONS[metric]}
 
@@ -80,7 +105,7 @@ RESPONSE FORMAT: Single integer between 0-100 only.
     return Math.min(100, Math.max(0, Math.round(score)));
   } catch (error) {
     console.error(`Error generating score for ${metric}:`, error);
-    return calculateFallbackScore(metric, answers);
+    return calculateFallbackScore(metric, quizAnswers, habitsAnswers);
   }
 }
 
@@ -119,18 +144,18 @@ function getScoringCriteria(metric: MetricKey): string {
   }
 }
 
-// Add a simple formula-based scoring fallback when OpenAI fails
+// Add a formula-based scoring fallback that considers both quiz and habits data
 function calculateFallbackScore(
   metric: MetricKey,
-  answers: QuizAnswer[]
+  quizAnswers: QuizAnswer[],
+  habitsAnswers: HabitsAnswer[]
 ): number {
-  // Simple scoring system based on answer indices
-  // Higher indices generally correspond to more positive answers
-  let score = 50; // Default score
+  // Base score
+  let score = 50;
   let totalWeight = 0;
 
-  // Each question might contribute differently to each metric
-  const questionWeights: Record<MetricKey, Record<number, number>> = {
+  // Each question in quiz might contribute differently to each metric
+  const quizWeights: Record<MetricKey, Record<number, number>> = {
     wisdom: { 1: 2, 2: 3, 3: 1, 4: 2, 5: 3 },
     strength: { 1: 1, 2: 3, 3: 3, 4: 2, 5: 1 },
     focus: { 1: 1, 2: 1, 3: 3, 4: 3, 5: 2 },
@@ -138,16 +163,16 @@ function calculateFallbackScore(
     discipline: { 1: 2, 2: 1, 3: 2, 4: 3, 5: 3 },
   };
 
-  // Calculate a weighted score based on the answers
-  answers.forEach((answer) => {
+  // Calculate quiz component of the score
+  quizAnswers.forEach((answer) => {
     const questionId = Number(answer.questionId);
 
     // Skip if not a number question or no weight for this metric
-    if (isNaN(questionId) || !questionWeights[metric][questionId]) {
+    if (isNaN(questionId) || !quizWeights[metric][questionId]) {
       return;
     }
 
-    const weight = questionWeights[metric][questionId];
+    const weight = quizWeights[metric][questionId];
     totalWeight += weight;
 
     // Convert answer to a score (assumed to be index-based, 0-4)
@@ -165,6 +190,50 @@ function calculateFallbackScore(
     score += answerValue * 25 * weight;
   });
 
+  // Habit weights for each metric
+  const habitWeights: Record<MetricKey, Record<number, number>> = {
+    wisdom: { 1: 1, 7: 2 },  // Wake up time, screen time
+    strength: { 2: 3, 3: 3, 4: 2, 5: 2, 6: 2, 8: 1 },  // Exercise, gym, sit-ups, push-ups, water, cold showers
+    focus: { 1: 1, 7: 3 },  // Wake up time, screen time
+    confidence: { 2: 1, 3: 1, 4: 1, 5: 1 },  // Exercise habits can affect confidence
+    discipline: { 1: 3, 2: 2, 3: 2, 6: 1, 8: 3 },  // Wake up, exercise, gym, water, cold showers
+  };
+
+  // Add habits component to the score
+  habitsAnswers.forEach((answer) => {
+    const questionId = Number(answer.questionId);
+
+    // Skip if no weight for this metric
+    if (!habitWeights[metric][questionId]) {
+      return;
+    }
+
+    const weight = habitWeights[metric][questionId];
+    totalWeight += weight;
+
+    let answerValue = 0;
+    if (typeof answer.answer === 'number') {
+      // For most habits, like exercise, lower numbers are worse (e.g., "I don't run")
+      if ([2, 3, 4, 5, 6, 8].includes(questionId)) {
+        // Convert 1-5 scale to 0-4 scale
+        answerValue = (answer.answer - 1);
+      }
+      // For wake up time, lower is better (waking up earlier)
+      else if (questionId === 1) {
+        // Reverse the scale: 5→0, 4→1, 3→2, 2→3, 1→4
+        answerValue = 5 - answer.answer;
+      }
+      // For screen time, lower is better (less screen time)
+      else if (questionId === 7) {
+        // Reverse the scale: 5→0, 4→1, 3→2, 2→3, 1→4
+        answerValue = 5 - answer.answer;
+      }
+    }
+
+    // Contribute to the score (0-4 scale to 0-100 scale)
+    score += answerValue * 25 * weight;
+  });
+
   // Normalize by weights
   if (totalWeight > 0) {
     score = Math.round(score / totalWeight);
@@ -175,10 +244,11 @@ function calculateFallbackScore(
 }
 
 async function computeMetrics(
-  answers: QuizAnswer[]
+  quizAnswers: QuizAnswer[],
+  habitsAnswers: HabitsAnswer[]
 ): Promise<Record<MetricKey, number>> {
-  console.log('Starting metrics computation...');
-  const context = buildContextString(answers);
+  console.log('Starting metrics computation with quiz and habits data...');
+  const context = buildContextString(quizAnswers, habitsAnswers);
 
   const metrics: Record<MetricKey, number> = {
     wisdom: 0,
@@ -193,14 +263,14 @@ async function computeMetrics(
 
   for (const metric of metricKeys) {
     try {
-      const score = await getMetricScore(metric, context, answers);
+      const score = await getMetricScore(metric, context, quizAnswers, habitsAnswers);
       metrics[metric] = score;
     } catch (error) {
       console.error(
         `Failed to get score for ${metric}, using fallback:`,
         error
       );
-      metrics[metric] = calculateFallbackScore(metric, answers);
+      metrics[metric] = calculateFallbackScore(metric, quizAnswers, habitsAnswers);
     }
   }
 
@@ -230,7 +300,10 @@ export default function ResultsScreen() {
 
     try {
       console.time('Metrics calculation (retry)');
-      const m = await computeMetrics(userData.quiz.answers);
+      const m = await computeMetrics(
+        userData.quiz.answers,
+        userData.habits?.answers || []
+      );
       console.timeEnd('Metrics calculation (retry)');
       setMetrics(m);
     } catch (err) {
@@ -250,7 +323,10 @@ export default function ResultsScreen() {
 
         try {
           console.time('Metrics calculation');
-          const m = await computeMetrics(userData.quiz.answers);
+          const m = await computeMetrics(
+            userData.quiz.answers,
+            userData.habits?.answers || []
+          );
           console.timeEnd('Metrics calculation');
 
           console.log('📊 Setting metrics state with calculated values');
@@ -307,6 +383,9 @@ export default function ResultsScreen() {
     );
   }
 
+  // Check if habits data is available
+  const hasHabitsData = userData.habits && userData.habits.answers && userData.habits.answers.length > 0;
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="light" />
@@ -315,7 +394,11 @@ export default function ResultsScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         <Text style={styles.title}>Your Assessment Results</Text>
-        <Text style={styles.subtitle}>Here are your key life metrics</Text>
+        <Text style={styles.subtitle}>
+          {hasHabitsData
+            ? "Here are your key life metrics based on your quiz and habits assessment"
+            : "Here are your key life metrics based on your quiz"}
+        </Text>
         <View style={{ marginBottom: 30 }}>
           {metrics &&
             Object.entries(metrics).map(([key, value]) => (
