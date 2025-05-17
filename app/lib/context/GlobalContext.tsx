@@ -37,7 +37,7 @@ export interface GlobalData {
     active: boolean;
   };
   todos: Todo[];
-  metrics?: Record<MetricKey, number>;
+  metrics: Record<MetricKey, number>;
   lastMetricsUpdate?: number; // timestamp of last metrics calculation
 }
 
@@ -78,7 +78,20 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
 
       if (storedData) {
         console.log('Found stored user data');
-        setUserData(JSON.parse(storedData));
+        const parsedData = JSON.parse(storedData);
+
+        // Ensure metrics exist
+        if (!parsedData.metrics) {
+          parsedData.metrics = {
+            wisdom: 0,
+            strength: 0,
+            focus: 0,
+            confidence: 0,
+            discipline: 0,
+          };
+        }
+
+        setUserData(parsedData);
       } else {
         console.log('No stored data, loading individual components...');
         // Load individual components
@@ -107,32 +120,40 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
             storedTodos.length > 0
               ? storedTodos
               : [
-                  {
-                    id: '1',
-                    text: 'Take a 10-minute meditation break',
-                    completed: false,
-                  },
-                  {
-                    id: '2',
-                    text: 'Drink 8 glasses of water today',
-                    completed: false,
-                  },
-                  {
-                    id: '3',
-                    text: 'Go for a 30-minute walk',
-                    completed: false,
-                  },
-                  {
-                    id: '4',
-                    text: 'Practice deep breathing exercises',
-                    completed: false,
-                  },
-                  {
-                    id: '5',
-                    text: "Write down 3 things you're grateful for",
-                    completed: false,
-                  },
-                ],
+                {
+                  id: '1',
+                  text: 'Take a 10-minute meditation break',
+                  completed: false,
+                },
+                {
+                  id: '2',
+                  text: 'Drink 8 glasses of water today',
+                  completed: false,
+                },
+                {
+                  id: '3',
+                  text: 'Go for a 30-minute walk',
+                  completed: false,
+                },
+                {
+                  id: '4',
+                  text: 'Practice deep breathing exercises',
+                  completed: false,
+                },
+                {
+                  id: '5',
+                  text: "Write down 3 things you're grateful for",
+                  completed: false,
+                },
+              ],
+          // Initialize metrics with default values
+          metrics: {
+            wisdom: 10,
+            strength: 10,
+            focus: 10,
+            confidence: 10,
+            discipline: 10,
+          },
         };
 
         console.log('Setting initial user data:', newUserData);
@@ -327,15 +348,30 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateMetrics = async (metrics: Record<MetricKey, number>) => {
-    if (!userData) return;
+    console.log('GlobalContext: Updating metrics to:', metrics);
 
-    const newData = {
-      ...userData,
-      metrics,
-      lastMetricsUpdate: Date.now(),
-    };
+    if (!userData) {
+      console.error('Cannot update metrics: userData is null');
+      return;
+    }
 
-    await saveUserData(newData);
+    try {
+      const newData = {
+        ...userData,
+        metrics,
+        lastMetricsUpdate: Date.now(),
+      };
+
+      // Save to AsyncStorage
+      await AsyncStorage.setItem('userData', JSON.stringify(newData));
+      console.log('GlobalContext: Metrics saved to AsyncStorage');
+
+      // Update state
+      setUserData(newData);
+      console.log('GlobalContext: State updated with new metrics');
+    } catch (error) {
+      console.error('Error updating metrics:', error);
+    }
   };
 
   return (
