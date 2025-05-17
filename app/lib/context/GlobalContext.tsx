@@ -70,22 +70,29 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   // Load initial data
-  useEffect(() => {
-    loadUserData();
-  }, []);
-
   const loadUserData = async () => {
     try {
+      console.log('Loading user data...');
+      // First try to load from AsyncStorage
       const storedData = await AsyncStorage.getItem('userData');
+
       if (storedData) {
+        console.log('Found stored user data');
         setUserData(JSON.parse(storedData));
       } else {
-        const quizData = await getQuizData();
-        const habitsData = await getHabitsData();
-        const subscriptionData = await getSubscription();
-        const storedTodos = await getTodos();
+        console.log('No stored data, loading individual components...');
+        // Load individual components
+        const [quizData, habitsData, subscriptionData, storedTodos] =
+          await Promise.all([
+            getQuizData(),
+            getHabitsData(),
+            getSubscription(),
+            getTodos(),
+          ]);
 
-        setUserData({
+        console.log('Loaded subscription data:', subscriptionData);
+
+        const newUserData: GlobalData = {
           quiz: {
             answers: quizData?.answers || [],
             completed: quizData?.completed || false,
@@ -126,7 +133,12 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
                     completed: false,
                   },
                 ],
-        });
+        };
+
+        console.log('Setting initial user data:', newUserData);
+        setUserData(newUserData);
+        // Also save to AsyncStorage
+        await AsyncStorage.setItem('userData', JSON.stringify(newUserData));
       }
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -134,6 +146,11 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     }
   };
+
+  // Load data when component mounts
+  useEffect(() => {
+    loadUserData();
+  }, []);
 
   const saveUserData = async (newData: GlobalData) => {
     try {
@@ -226,26 +243,37 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
 
   const updateSubscription = async (active: boolean) => {
     try {
+      const subscriptionData = {
+        subscribedAt: new Date().toISOString(),
+        active,
+      };
+
+      // Save to subscription storage
       await saveSubscription(active);
-      setUserData((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          subscription: {
-            subscribedAt: new Date().toISOString(),
-            active,
-          },
-        };
-      });
+
+      // Update global state
+      const newData: GlobalData = {
+        ...userData!,
+        subscription: subscriptionData,
+      };
+
+      // Save to AsyncStorage and update state
+      await saveUserData(newData);
+
+      console.log('Subscription updated:', subscriptionData);
     } catch (error) {
       console.error('Error updating subscription:', error);
+      throw error; // Re-throw to handle in UI
     }
   };
 
   const clearUserData = async () => {
     try {
-      await clearSubscription();
-      await clearTodos();
+      await Promise.all([
+        clearSubscription(),
+        clearTodos(),
+        AsyncStorage.removeItem('userData'),
+      ]);
       setUserData(null);
     } catch (error) {
       console.error('Error clearing user data:', error);

@@ -1,8 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useGlobal } from '../lib/context/GlobalContext';
 
 export default function PlanScreen() {
   const insets = useSafeAreaInsets();
+  const { userData } = useGlobal();
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>

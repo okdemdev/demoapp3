@@ -358,6 +358,7 @@ export default function ResultsScreen() {
     null
   );
   const [error, setError] = useState<string | null>(null);
+  const [isCalculating, setIsCalculating] = useState(false);
 
   // Animation values
   const [progressAnim] = useState(new Animated.Value(0));
@@ -384,41 +385,11 @@ export default function ResultsScreen() {
     return Date.now() - lastUpdate > twentyFourHours;
   };
 
-  // Define calculate function for retry button
-  const calculate = async () => {
-    if (!userData?.quiz?.answers) {
-      setError('No quiz data found. Please complete the quiz first.');
-      return;
-    }
-
-    console.log('🔄 Manual retry of metrics calculation');
-    setCurrentStep(0); // Reset to first loading step
-    setError(null);
-
-    // Animate through loading steps
-    animateLoadingSequence();
-
-    try {
-      console.time('Metrics calculation (retry)');
-      const m = await computeMetrics(
-        userData.quiz.answers,
-        userData.habits?.answers || []
-      );
-      console.timeEnd('Metrics calculation (retry)');
-
-      // Save metrics to global context and storage
-      await updateMetrics(m);
-      setMetrics(m);
-    } catch (err) {
-      console.error('❌ Error calculating metrics on retry:', err);
-      setError('Failed to calculate your metrics. Please try again later.');
-    }
-  };
-
   // Function to animate through the loading steps
   const animateLoadingSequence = () => {
     // Reset progress
     progressAnim.setValue(0);
+    setIsCalculating(true);
 
     // Animate through each step
     loadingSteps.forEach((_, index) => {
@@ -438,11 +409,40 @@ export default function ResultsScreen() {
         setCurrentStep(index);
       }, delay);
     });
+  };
 
-    // After the last step, wait a bit before showing results
-    setTimeout(() => {
-      // The component will show results after this
-    }, loadingSteps.length * 1500 + 500);
+  // Define calculate function for retry button
+  const calculate = async () => {
+    if (!userData?.quiz?.answers) {
+      setError('No quiz data found. Please complete the quiz first.');
+      return;
+    }
+
+    console.log('🔄 Manual retry of metrics calculation');
+    setCurrentStep(0); // Reset to first loading step
+    setError(null);
+    setIsCalculating(true);
+
+    // Animate through loading steps
+    animateLoadingSequence();
+
+    try {
+      console.time('Metrics calculation (retry)');
+      const m = await computeMetrics(
+        userData.quiz.answers,
+        userData.habits?.answers || []
+      );
+      console.timeEnd('Metrics calculation (retry)');
+
+      // Save metrics to global context and storage
+      await updateMetrics(m);
+      setMetrics(m);
+    } catch (err) {
+      console.error('❌ Error calculating metrics on retry:', err);
+      setError('Failed to calculate your metrics. Please try again later.');
+    } finally {
+      setIsCalculating(false);
+    }
   };
 
   useEffect(() => {
@@ -475,12 +475,14 @@ export default function ResultsScreen() {
       ) {
         console.log('📊 Using cached metrics');
         setMetrics(userData.metrics);
+        setIsCalculating(false);
         return;
       }
 
       console.log('🔄 Starting metrics calculation in useEffect');
       setCurrentStep(0); // Start with the first loading step
       setError(null);
+      setIsCalculating(true);
 
       // Animate through loading steps
       animateLoadingSequence();
@@ -504,6 +506,8 @@ export default function ResultsScreen() {
       } catch (err) {
         console.error('❌ Error calculating metrics:', err);
         setError('Failed to calculate your metrics. Please try again.');
+      } finally {
+        setIsCalculating(false);
       }
     }
     calculateInitial();
@@ -551,8 +555,8 @@ export default function ResultsScreen() {
     );
   }
 
-  // Show loading screens sequence
-  if (!metrics || currentStep < loadingSteps.length - 1) {
+  // Show loading screens sequence only when actively calculating
+  if (isCalculating && (!metrics || currentStep < loadingSteps.length - 1)) {
     const step = loadingSteps[currentStep];
 
     return (

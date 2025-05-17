@@ -27,9 +27,18 @@ export const saveSubscription = async (active: boolean) => {
 export const getSubscription = async (): Promise<SubscriptionData | null> => {
   try {
     const data = await AsyncStorage.getItem(SUBSCRIPTION_STORAGE_KEY);
-    return data ? JSON.parse(data) : null;
+    if (!data) return null;
+
+    const parsed = JSON.parse(data);
+    // Validate the data structure
+    if (typeof parsed.active !== 'boolean' || !parsed.subscribedAt) {
+      console.warn('Invalid subscription data format:', parsed);
+      return null;
+    }
+
+    return parsed;
   } catch (error) {
-    console.error('Error getting subscription data:', error);
+    console.error('Error getting subscription:', error);
     return null;
   }
 };
@@ -39,7 +48,7 @@ export const clearSubscription = async () => {
     await AsyncStorage.removeItem(SUBSCRIPTION_STORAGE_KEY);
     return true;
   } catch (error) {
-    console.error('Error clearing subscription data:', error);
+    console.error('Error clearing subscription:', error);
     return false;
   }
 };
