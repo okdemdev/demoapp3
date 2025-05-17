@@ -41,7 +41,7 @@ export default function HabitsQuizScreen() {
   const questionIndex = parseInt(id || '0', 10);
   const { userData, updateHabitsAnswer } = useGlobal();
   const insets = useSafeAreaInsets();
-  const [selectedValue, setSelectedValue] = useState<number | null>(null);
+  const [selectedValue, setSelectedValue] = useState<number | null>(1); // Default to 1 instead of null
   const [isNavigating, setIsNavigating] = useState(false);
 
   // DEBUG: Log the question IDs to verify all questions are present
@@ -56,7 +56,7 @@ export default function HabitsQuizScreen() {
   // Find the current question by ID
   const currentQuestion: HabitsQuestion =
     habitsQuestions.find((q) => q.id === parseInt(id || '0', 10)) ||
-    habitsQuestions[0];
+    habitsQuestions[0]; // Fallback to first question if ID not found
 
   // Get the index to determine if this is the last question
   const currentIndex = habitsQuestions.findIndex(
@@ -78,26 +78,31 @@ export default function HabitsQuizScreen() {
   const [sliderPosition] = useState(new Animated.Value(0));
 
   useEffect(() => {
+    // Always ensure a default value is set
+    let value = 1; // Default value (first position)
+    let position = 0; // Default position (beginning of slider)
+
     // Check if there's already an answer for this question
     if (userData && userData.habits?.answers) {
       const existingAnswer = userData.habits.answers.find(
         (a) => a.questionId === currentQuestion.id
       );
       if (existingAnswer && typeof existingAnswer.answer === 'number') {
-        setSelectedValue(existingAnswer.answer);
+        value = existingAnswer.answer;
         // Set slider position based on existing answer
-        const newPosition =
+        position =
           ((existingAnswer.answer - 1) /
-            (currentQuestion.sliderOptions?.labels.length || 5 - 1)) *
+            ((currentQuestion.sliderOptions?.labels?.length || 5) - 1)) *
           sliderWidth;
-        sliderPosition.setValue(newPosition);
-      } else {
-        // Reset to first position by default
-        setSelectedValue(1);
-        sliderPosition.setValue(0);
       }
     }
-  }, [questionIndex, userData, currentQuestion]);
+
+    // Always set both values to ensure we have valid data
+    setSelectedValue(value);
+    sliderPosition.setValue(position);
+
+    console.log(`Question ${currentQuestion.id}: Set default value to ${value}`);
+  }, [questionIndex, userData, currentQuestion, sliderWidth]);
 
   // Calculate progress for the top bar
   const totalQuestions = habitsQuestions.length;
@@ -158,7 +163,7 @@ export default function HabitsQuizScreen() {
         // DEBUG: Show what we're going to do next
         console.log(`Current ID: ${currentQuestion.id}, Next ID: ${nextID}`);
 
-        if (nextID) {
+        if (nextID !== null) {
           console.log(`Navigating to question ${nextID}`);
           router.push(`/habits/${nextID}`);
         } else {
@@ -201,7 +206,7 @@ export default function HabitsQuizScreen() {
   // Get the current selected label
   const selectedLabel =
     currentQuestion.sliderOptions?.labels[
-      selectedValue ? selectedValue - 1 : 0
+    selectedValue ? selectedValue - 1 : 0
     ] || '';
 
   return (
@@ -328,7 +333,7 @@ export default function HabitsQuizScreen() {
           style={[
             styles.nextButton,
             (selectedValue === null || isNavigating) &&
-              styles.nextButtonDisabled,
+            styles.nextButtonDisabled,
           ]}
           onPress={handleConfirm}
           disabled={selectedValue === null || isNavigating}
@@ -337,8 +342,8 @@ export default function HabitsQuizScreen() {
             {isNavigating
               ? 'Please wait...'
               : isLastQuestion
-              ? 'Finish'
-              : 'Next'}
+                ? 'Finish'
+                : 'Next'}
           </Text>
         </TouchableOpacity>
       </View>
