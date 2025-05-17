@@ -126,8 +126,8 @@ export default function OnboardingScreen() {
                                 animated: true
                             });
                         } else {
-                            // Navigate to habits quiz after onboarding
-                            router.push('/results');
+                            // Navigate to habits quiz with the first question
+                            router.push('/habits/1');
                         }
                     }}
                 >
