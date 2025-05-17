@@ -19,7 +19,6 @@ interface OpenAIError extends Error {
 class OpenAIService {
   private openai: OpenAI;
   private static instance: OpenAIService;
-  private readonly REQUEST_TIMEOUT = 120000; // 2 minutes in milliseconds
 
   private constructor() {
     // Get API key from config
@@ -29,14 +28,15 @@ class OpenAIService {
       console.error(
         'OpenAI API key is missing. Please check your configuration.'
       );
+      throw new Error('OpenAI API key is required');
     }
 
     // Initialize OpenAI client
     try {
       this.openai = new OpenAI({
         apiKey: apiKey,
-        dangerouslyAllowBrowser: true, // Allow in browser/mobile environment
-        timeout: this.REQUEST_TIMEOUT,
+        dangerouslyAllowBrowser: true, // Required for React Native
+        timeout: 30 * 1000,
       });
     } catch (error) {
       console.error('Failed to initialize OpenAI client:', error);
@@ -46,7 +46,12 @@ class OpenAIService {
 
   public static getInstance(): OpenAIService {
     if (!OpenAIService.instance) {
-      OpenAIService.instance = new OpenAIService();
+      try {
+        OpenAIService.instance = new OpenAIService();
+      } catch (error) {
+        console.error('Failed to create OpenAI service instance:', error);
+        throw error;
+      }
     }
     return OpenAIService.instance;
   }
@@ -63,27 +68,14 @@ class OpenAIService {
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        // Create an AbortController for this attempt
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-          controller.abort();
-        }, this.REQUEST_TIMEOUT);
-
-        const response = await this.openai.chat.completions.create(
-          {
-            model: 'gpt-4.1-mini',
-            messages,
-            temperature: 0.5, // Lower temperature for more deterministic responses
-          },
-          { signal: controller.signal }
-        );
-
-        clearTimeout(timeoutId);
-
-        // Log success status
-        console.debug(
-          `OpenAI request successful [Attempt ${attempt + 1}/${maxRetries}]`
-        );
+        const response = await this.openai.chat.completions.create({
+          model: 'gpt-4.1-mini',
+          messages,
+          temperature: 0.5, // Lower temperature for more consistent responses
+          max_tokens: 1000, // Limit response length since we only need numbers
+          presence_penalty: 0, // No need to encourage diverse responses
+          frequency_penalty: 0, // No need to penalize frequent tokens
+        });
 
         const content = response.choices[0]?.message?.content?.trim();
 
@@ -107,8 +99,8 @@ class OpenAIService {
       } catch (error) {
         lastError = error as OpenAIError;
 
-        // Log error details quietly
-        console.debug(`OpenAI attempt ${attempt + 1}/${maxRetries} failed:`, {
+        // Log error details
+        console.warn(`OpenAI attempt ${attempt + 1}/${maxRetries} failed:`, {
           status: lastError.status,
           type: lastError.type,
           message: lastError.message,
@@ -116,20 +108,23 @@ class OpenAIService {
             lastError.name === 'AbortError' || lastError.code === 'ETIMEDOUT',
         });
 
-        if (attempt < maxRetries - 1) {
-          // Exponential backoff: 1s, 2s, 4s, 8s, 16s
-          const delay = Math.pow(2, attempt) * 1000;
-          await new Promise((resolve) => setTimeout(resolve, delay));
+        // If it's the last attempt, or if it's a fatal error, throw immediately
+        if (
+          attempt === maxRetries - 1 ||
+          lastError.status === 401 || // Unauthorized
+          lastError.status === 403 || // Forbidden
+          lastError.status === 429 // Rate limit exceeded
+        ) {
+          throw lastError;
         }
-      }
-    }
 
-    // Only throw the error after all retries are exhausted
-    if (lastError) {
-      const errorMessage = lastError.status
-        ? `OpenAI request failed with status ${lastError.status}`
-        : 'Failed to generate response after multiple attempts';
-      throw new Error(errorMessage);
+        // Exponential backoff with jitter
+        const delay = Math.min(
+          1000 * Math.pow(2, attempt) + Math.random() * 1000,
+          10000
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
 
     throw new Error('Failed to generate response after multiple attempts');
@@ -142,7 +137,7 @@ class OpenAIService {
     prompt: string,
     systemMessage: string,
     zodSchema: z.ZodType<T>,
-    maxRetries: number = 5
+    maxRetries: number = 3
   ): Promise<T> {
     try {
       return await this.generateWithRetry<T>(
