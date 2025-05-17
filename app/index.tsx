@@ -26,7 +26,7 @@ export default function WelcomeScreen() {
 
   // Typing effect state
   const phrases = [
-    'Welcome to Rise.',
+    'Welcome to Goose Peker.',
     'Ready to start your life reset journey?',
     'Your next 66 days will be the most transformative period of your life ever.',
   ];
@@ -63,7 +63,7 @@ export default function WelcomeScreen() {
         setDisplayedText(text.slice(0, index));
 
         // Trigger haptic feedback
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); // Ignore errors
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { }); // Ignore errors
 
         index++;
         typingTimerRef.current = setTimeout(typeChar, 70) as any;
