@@ -81,13 +81,18 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   // Load initial data
   const loadUserData = async () => {
     try {
-      console.log('Loading user data...');
+      console.log('🔄 Loading user data...');
       // First try to load from AsyncStorage
       const storedData = await AsyncStorage.getItem('userData');
+      console.log('📦 Raw stored data:', storedData);
 
       if (storedData) {
-        console.log('Found stored user data');
+        console.log('✅ Found stored user data');
         const parsedData = JSON.parse(storedData);
+        console.log(
+          '📝 Parsed stored data:',
+          JSON.stringify(parsedData, null, 2)
+        );
 
         // Ensure metrics exist
         if (!parsedData.metrics) {
@@ -102,7 +107,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
 
         setUserData(parsedData);
       } else {
-        console.log('No stored data, loading individual components...');
+        console.log('⚠️ No stored data, loading individual components...');
         // Load individual components
         const [quizData, habitsData, subscriptionData, storedTodos, planData] =
           await Promise.all([
@@ -113,7 +118,13 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
             getPlan(),
           ]);
 
-        console.log('Loaded subscription data:', subscriptionData);
+        console.log('📝 Individual components loaded:', {
+          quizData: JSON.stringify(quizData, null, 2),
+          habitsData: JSON.stringify(habitsData, null, 2),
+          subscriptionData: JSON.stringify(subscriptionData, null, 2),
+          storedTodos: JSON.stringify(storedTodos, null, 2),
+          planData: JSON.stringify(planData, null, 2),
+        });
 
         const newUserData: GlobalData = {
           quiz: {
@@ -138,13 +149,17 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           plan: planData || undefined,
         };
 
-        console.log('Setting initial user data:', newUserData);
+        console.log(
+          '📝 Setting initial user data:',
+          JSON.stringify(newUserData, null, 2)
+        );
         setUserData(newUserData);
         // Also save to AsyncStorage
         await AsyncStorage.setItem('userData', JSON.stringify(newUserData));
+        console.log('✅ Saved initial user data to AsyncStorage');
       }
     } catch (error) {
-      console.error('Error loading user data:', error);
+      console.error('❌ Error loading user data:', error);
     } finally {
       setIsLoading(false);
     }
@@ -157,10 +172,12 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
 
   const saveUserData = async (newData: GlobalData) => {
     try {
+      console.log('💾 Saving user data:', JSON.stringify(newData, null, 2));
       await AsyncStorage.setItem('userData', JSON.stringify(newData));
       setUserData(newData);
+      console.log('✅ Successfully saved and updated user data');
     } catch (error) {
-      console.error('Error saving user data:', error);
+      console.error('❌ Error saving user data:', error);
     }
   };
 
@@ -169,9 +186,20 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     answer: string | number
   ) => {
     try {
+      console.log('🎯 Saving quiz answer:', { questionId, answer });
+      console.log(
+        '📊 Current userData before quiz update:',
+        JSON.stringify(userData, null, 2)
+      );
+
       await saveQuizAnswer(questionId, answer);
+
       setUserData((prev) => {
-        if (!prev) return null;
+        if (!prev) {
+          console.log('❌ Previous userData is null in quiz update!');
+          return null;
+        }
+
         const updatedAnswers = [...prev.quiz.answers];
         const existingIndex = updatedAnswers.findIndex(
           (a) => a.questionId === questionId
@@ -183,23 +211,41 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           updatedAnswers.push({ questionId, answer });
         }
 
-        return {
+        const newData = {
           ...prev,
           quiz: {
             ...prev.quiz,
             answers: updatedAnswers,
           },
         };
+
+        console.log(
+          '📊 Updated userData after quiz answer:',
+          JSON.stringify(newData, null, 2)
+        );
+        return newData;
       });
+
+      // Verify the data was saved
+      const storedQuizData = await AsyncStorage.getItem('@lifeguide_quiz_data');
+      console.log('📊 Stored quiz data in AsyncStorage:', storedQuizData);
+
+      // Also verify global userData storage
+      const globalData = await AsyncStorage.getItem('userData');
+      console.log('🌍 Current global userData in storage:', globalData);
     } catch (error) {
-      console.error('Error updating quiz answer:', error);
+      console.error('❌ Error updating quiz answer:', error);
     }
   };
 
   const updateQuizInsight = async (questionId: number, insight: string) => {
+    console.log('💡 Updating quiz insight:', { questionId, insight });
     setUserData((prev) => {
-      if (!prev) return null;
-      return {
+      if (!prev) {
+        console.log('❌ Previous userData is null in insight update!');
+        return null;
+      }
+      const newData = {
         ...prev,
         quiz: {
           ...prev.quiz,
@@ -209,6 +255,11 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           },
         },
       };
+      console.log(
+        '💡 Updated userData after insight:',
+        JSON.stringify(newData, null, 2)
+      );
+      return newData;
     });
   };
 
@@ -217,9 +268,20 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     answer: string | number
   ) => {
     try {
+      console.log('💪 Saving habit answer:', { questionId, answer });
+      console.log(
+        '📊 Current userData before habit update:',
+        JSON.stringify(userData, null, 2)
+      );
+
       await saveHabitsAnswer(questionId, answer);
+
       setUserData((prev) => {
-        if (!prev) return null;
+        if (!prev) {
+          console.log('❌ Previous userData is null in habit update!');
+          return null;
+        }
+
         const updatedAnswers = [...prev.habits.answers];
         const existingIndex = updatedAnswers.findIndex(
           (a) => a.questionId === questionId
@@ -231,16 +293,32 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           updatedAnswers.push({ questionId, answer });
         }
 
-        return {
+        const newData = {
           ...prev,
           habits: {
             ...prev.habits,
             answers: updatedAnswers,
           },
         };
+
+        console.log(
+          '📊 Updated userData after habit answer:',
+          JSON.stringify(newData, null, 2)
+        );
+        return newData;
       });
+
+      // Verify the data was saved
+      const storedHabitsData = await AsyncStorage.getItem(
+        '@lifeguide_habits_data'
+      );
+      console.log('📊 Stored habits data in AsyncStorage:', storedHabitsData);
+
+      // Also verify global userData storage
+      const globalData = await AsyncStorage.getItem('userData');
+      console.log('🌍 Current global userData in storage:', globalData);
     } catch (error) {
-      console.error('Error updating habits answer:', error);
+      console.error('❌ Error updating habits answer:', error);
     }
   };
 
