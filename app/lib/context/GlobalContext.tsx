@@ -5,6 +5,7 @@ import {
   getHabitsData,
   saveHabitsAnswer,
 } from '../habitsStorage';
+import { Plan, getPlan, savePlan } from '../planStorage';
 import { QuizAnswer, getQuizData, saveQuizAnswer } from '../quizStorage';
 import {
   clearSubscription,
@@ -39,6 +40,7 @@ export interface GlobalData {
   todos: Todo[];
   metrics: Record<MetricKey, number>;
   lastMetricsUpdate?: number; // timestamp of last metrics calculation
+  plan?: Plan;
 }
 
 type MetricKey = 'wisdom' | 'strength' | 'focus' | 'confidence' | 'discipline';
@@ -50,13 +52,14 @@ interface GlobalContextType {
     questionId: number,
     answer: string | number
   ) => Promise<void>;
+  updateQuizInsight: (questionId: number, insight: string) => Promise<void>;
   updateHabitsAnswer: (
     questionId: number,
     answer: string | number
   ) => Promise<void>;
-  updateQuizInsight: (questionId: number, insight: string) => Promise<void>;
   updateSubscription: (active: boolean) => Promise<void>;
   clearUserData: () => Promise<void>;
+  updatePlan: (plan: Plan) => Promise<void>;
   addTodo: (text: string) => Promise<void>;
   toggleTodo: (id: string) => Promise<void>;
   uncheckAllTodos: () => Promise<void>;
@@ -95,12 +98,13 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       } else {
         console.log('No stored data, loading individual components...');
         // Load individual components
-        const [quizData, habitsData, subscriptionData, storedTodos] =
+        const [quizData, habitsData, subscriptionData, storedTodos, planData] =
           await Promise.all([
             getQuizData(),
             getHabitsData(),
             getSubscription(),
             getTodos(),
+            getPlan(),
           ]);
 
         console.log('Loaded subscription data:', subscriptionData);
@@ -120,32 +124,32 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
             storedTodos.length > 0
               ? storedTodos
               : [
-                {
-                  id: '1',
-                  text: 'Take a 10-minute meditation break',
-                  completed: false,
-                },
-                {
-                  id: '2',
-                  text: 'Drink 8 glasses of water today',
-                  completed: false,
-                },
-                {
-                  id: '3',
-                  text: 'Go for a 30-minute walk',
-                  completed: false,
-                },
-                {
-                  id: '4',
-                  text: 'Practice deep breathing exercises',
-                  completed: false,
-                },
-                {
-                  id: '5',
-                  text: "Write down 3 things you're grateful for",
-                  completed: false,
-                },
-              ],
+                  {
+                    id: '1',
+                    text: 'Take a 10-minute meditation break',
+                    completed: false,
+                  },
+                  {
+                    id: '2',
+                    text: 'Drink 8 glasses of water today',
+                    completed: false,
+                  },
+                  {
+                    id: '3',
+                    text: 'Go for a 30-minute walk',
+                    completed: false,
+                  },
+                  {
+                    id: '4',
+                    text: 'Practice deep breathing exercises',
+                    completed: false,
+                  },
+                  {
+                    id: '5',
+                    text: "Write down 3 things you're grateful for",
+                    completed: false,
+                  },
+                ],
           // Initialize metrics with default values
           metrics: {
             wisdom: 10,
@@ -154,6 +158,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
             confidence: 10,
             discipline: 10,
           },
+          plan: planData || undefined,
         };
 
         console.log('Setting initial user data:', newUserData);
@@ -288,6 +293,27 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updatePlan = async (plan: Plan) => {
+    try {
+      // Save to plan storage
+      await savePlan(plan);
+
+      // Update global state
+      const newData: GlobalData = {
+        ...userData!,
+        plan,
+      };
+
+      // Save to AsyncStorage and update state
+      await saveUserData(newData);
+
+      console.log('Plan updated:', plan);
+    } catch (error) {
+      console.error('Error updating plan:', error);
+      throw error;
+    }
+  };
+
   const clearUserData = async () => {
     try {
       await Promise.all([
@@ -380,10 +406,11 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         userData,
         isLoading,
         updateQuizAnswer,
-        updateHabitsAnswer,
         updateQuizInsight,
+        updateHabitsAnswer,
         updateSubscription,
         clearUserData,
+        updatePlan,
         addTodo,
         toggleTodo,
         uncheckAllTodos,

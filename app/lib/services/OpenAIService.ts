@@ -7,6 +7,7 @@ import { z } from 'zod';
 interface RetryOptions {
   maxRetries?: number;
   zodSchema?: z.ZodType<any>;
+  jsonMode?: boolean;
 }
 
 // Type for OpenAI API errors
@@ -63,7 +64,7 @@ class OpenAIService {
     messages: ChatCompletionMessageParam[],
     options: RetryOptions = {}
   ): Promise<T> {
-    const { maxRetries = 5, zodSchema } = options;
+    const { maxRetries = 5, zodSchema, jsonMode = false } = options;
     let lastError: OpenAIError | null = null;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -75,6 +76,7 @@ class OpenAIService {
           max_tokens: 1000, // Limit response length since we only need numbers
           presence_penalty: 0, // No need to encourage diverse responses
           frequency_penalty: 0, // No need to penalize frequent tokens
+          response_format: jsonMode ? { type: 'json_object' } : undefined,
         });
 
         const content = response.choices[0]?.message?.content?.trim();
@@ -86,9 +88,23 @@ class OpenAIService {
         // If a Zod schema was provided, validate the response
         if (zodSchema) {
           try {
-            const parsed = zodSchema.parse(content);
+            // Try to parse as JSON first if it's a string
+            let parsedContent: any;
+            if (typeof content === 'string') {
+              try {
+                parsedContent = JSON.parse(content);
+              } catch (e) {
+                console.warn('Failed to parse response as JSON:', content);
+                parsedContent = content;
+              }
+            } else {
+              parsedContent = content;
+            }
+
+            const parsed = zodSchema.parse(parsedContent);
             return parsed as T;
           } catch (validationError) {
+            console.warn('Raw response that failed validation:', content);
             throw new Error(
               `Validation failed: ${(validationError as Error).message}`
             );
@@ -137,14 +153,20 @@ class OpenAIService {
     prompt: string,
     systemMessage: string,
     zodSchema: z.ZodType<T>,
-    maxRetries: number = 3
+    maxRetries: number = 3,
+    jsonMode: boolean = true
   ): Promise<T> {
     try {
+      // If JSON mode is enabled, append JSON format instructions
+      const enhancedSystemMessage = jsonMode
+        ? `${systemMessage}\n\nIMPORTANT: You must respond with a valid JSON object only. Do not include any explanatory text or markdown formatting.`
+        : systemMessage;
+
       return await this.generateWithRetry<T>(
         [
           {
             role: 'system',
-            content: systemMessage,
+            content: enhancedSystemMessage,
           },
           {
             role: 'user',
@@ -154,6 +176,7 @@ class OpenAIService {
         {
           maxRetries,
           zodSchema,
+          jsonMode,
         }
       );
     } catch (error) {
