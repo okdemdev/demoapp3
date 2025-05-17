@@ -42,7 +42,7 @@ export const quizQuestions: QuizQuestion[] = [
     id: 2,
     question: 'What is your gender?',
     type: 'multiple_choice',
-    options: ['Male', 'Female', 'Other'],
+    options: ['Male', 'Female'],
   },
   {
     id: 3,
