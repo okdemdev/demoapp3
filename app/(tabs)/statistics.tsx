@@ -1,7 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGlobal } from '../lib/context/GlobalContext';
 
@@ -9,7 +15,7 @@ type MetricKey = 'wisdom' | 'strength' | 'focus' | 'confidence' | 'discipline';
 
 // Icons for each metric
 const METRIC_ICONS: Record<MetricKey, string> = {
-  wisdom: 'brain-outline',
+  wisdom: 'brain',
   strength: 'barbell-outline',
   focus: 'eye-outline',
   confidence: 'sunny-outline',
@@ -30,7 +36,9 @@ export default function StatisticsScreen() {
   const { userData } = useGlobal();
   const router = useRouter();
   const [selectedMetric, setSelectedMetric] = useState<MetricKey | null>(null);
-  const [metricHistory, setMetricHistory] = useState<Record<MetricKey, number[]>>({
+  const [metricHistory, setMetricHistory] = useState<
+    Record<MetricKey, number[]>
+  >({
     wisdom: [],
     strength: [],
     focus: [],
@@ -44,7 +52,7 @@ export default function StatisticsScreen() {
 
     return Math.round(
       Object.values(metrics).reduce((sum, value) => sum + value, 0) /
-      Object.keys(metrics).length
+        Object.keys(metrics).length
     );
   };
 
@@ -64,17 +72,21 @@ export default function StatisticsScreen() {
         discipline: [],
       };
 
-      Object.keys(userData.metrics).forEach(key => {
+      Object.keys(userData.metrics).forEach((key) => {
         const metric = key as MetricKey;
         const currentValue = userData.metrics[metric];
 
         // Generate 5 historical points with small random variations
-        const points = Array(5).fill(0).map((_, i) => {
-          // Earlier values slightly lower than current
-          const base = Math.max(0, currentValue - (5 - i) * 2);
-          // Add small random variation (-1 to +1)
-          return Math.round(Math.max(0, Math.min(100, base + (Math.random() * 2 - 1))));
-        });
+        const points = Array(5)
+          .fill(0)
+          .map((_, i) => {
+            // Earlier values slightly lower than current
+            const base = Math.max(0, currentValue - (5 - i) * 2);
+            // Add small random variation (-1 to +1)
+            return Math.round(
+              Math.max(0, Math.min(100, base + (Math.random() * 2 - 1)))
+            );
+          });
 
         history[metric] = [...points, currentValue];
       });
@@ -87,8 +99,10 @@ export default function StatisticsScreen() {
   const getGrowthRate = (metric: MetricKey): number => {
     if (!metricHistory[metric] || metricHistory[metric].length < 2) return 0;
 
-    const currentValue = metricHistory[metric][metricHistory[metric].length - 1];
-    const previousAvg = metricHistory[metric].slice(0, -1).reduce((sum, val) => sum + val, 0) /
+    const currentValue =
+      metricHistory[metric][metricHistory[metric].length - 1];
+    const previousAvg =
+      metricHistory[metric].slice(0, -1).reduce((sum, val) => sum + val, 0) /
       (metricHistory[metric].length - 1);
 
     return Math.round(((currentValue - previousAvg) / previousAvg) * 100);
@@ -127,15 +141,19 @@ export default function StatisticsScreen() {
             <Text
               style={[
                 styles.detailValue,
-                growthRate > 0 ? styles.positiveGrowth : styles.negativeGrowth
-              ]}>
-              {growthRate > 0 ? '+' : ''}{growthRate}%
+                growthRate > 0 ? styles.positiveGrowth : styles.negativeGrowth,
+              ]}
+            >
+              {growthRate > 0 ? '+' : ''}
+              {growthRate}%
             </Text>
           </View>
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Description</Text>
-            <Text style={styles.detailDescription}>{METRIC_DESCRIPTIONS[metric]}</Text>
+            <Text style={styles.detailDescription}>
+              {METRIC_DESCRIPTIONS[metric]}
+            </Text>
           </View>
 
           <View style={styles.progressContainer}>
@@ -144,12 +162,13 @@ export default function StatisticsScreen() {
               <View
                 style={[
                   styles.progressBar,
-                  { width: `${currentValue % 10 * 10}%` }
+                  { width: `${(currentValue % 10) * 10}%` },
                 ]}
               />
             </View>
             <Text style={styles.progressText}>
-              {currentValue % 10 * 10}% to level {Math.floor(currentValue / 10) + 1}
+              {(currentValue % 10) * 10}% to level{' '}
+              {Math.floor(currentValue / 10) + 1}
             </Text>
           </View>
 
@@ -169,32 +188,32 @@ export default function StatisticsScreen() {
         'Read books outside your comfort zone',
         'Practice daily journaling',
         'Engage in philosophical discussions',
-        'Meditate for self-awareness'
+        'Meditate for self-awareness',
       ],
       strength: [
         'Exercise for 30 minutes daily',
         'Maintain a balanced diet',
         'Get 7-8 hours of quality sleep',
-        'Stay hydrated throughout the day'
+        'Stay hydrated throughout the day',
       ],
       focus: [
         'Practice mindfulness meditation',
         'Work in focused sprints (25-50 min)',
         'Minimize digital distractions',
-        'Get regular physical exercise'
+        'Get regular physical exercise',
       ],
       confidence: [
         'Step outside your comfort zone daily',
         'Practice positive self-talk',
         'Set and achieve small goals',
-        'Build supportive relationships'
+        'Build supportive relationships',
       ],
       discipline: [
         'Create and follow daily routines',
         'Start with one habit at a time',
         'Track your progress visually',
-        'Eliminate environment triggers for bad habits'
-      ]
+        'Eliminate environment triggers for bad habits',
+      ],
     };
 
     return (
@@ -248,54 +267,60 @@ export default function StatisticsScreen() {
           {/* Individual metrics cards */}
           <Text style={styles.sectionTitle}>Your Metrics</Text>
           <View style={styles.metricsGrid}>
-            {userData?.metrics && Object.entries(userData.metrics).map(([key, value]) => {
-              const metricKey = key as MetricKey;
-              const growthRate = getGrowthRate(metricKey);
+            {userData?.metrics &&
+              Object.entries(userData.metrics).map(([key, value]) => {
+                const metricKey = key as MetricKey;
+                const growthRate = getGrowthRate(metricKey);
 
-              return (
-                <TouchableOpacity
-                  key={key}
-                  style={[styles.metricCard]}
-                  onPress={() => setSelectedMetric(metricKey)}
-                >
-                  <View style={styles.metricHeader}>
-                    <Ionicons
-                      name={METRIC_ICONS[metricKey] as any}
-                      size={24}
-                      color="#000"
-                    />
-                    <Text style={styles.metricName}>
-                      {key.charAt(0).toUpperCase() + key.slice(1)}
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.metricCard]}
+                    onPress={() => setSelectedMetric(metricKey)}
+                  >
+                    <View style={styles.metricHeader}>
+                      <Ionicons
+                        name={METRIC_ICONS[metricKey] as any}
+                        size={24}
+                        color="#000"
+                      />
+                      <Text style={styles.metricName}>
+                        {key.charAt(0).toUpperCase() + key.slice(1)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.metricContent}>
+                      <Text style={styles.metricValue}>
+                        {Math.round(value)}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.metricGrowth,
+                          growthRate >= 0
+                            ? styles.positiveGrowth
+                            : styles.negativeGrowth,
+                        ]}
+                      >
+                        {growthRate > 0 ? '+' : ''}
+                        {growthRate}%
+                      </Text>
+                    </View>
+
+                    <View style={styles.metricBarContainer}>
+                      <View
+                        style={[
+                          styles.metricBar,
+                          { width: `${Math.min(100, value)}%` },
+                        ]}
+                      />
+                    </View>
+
+                    <Text style={styles.metricDescription}>
+                      {METRIC_DESCRIPTIONS[metricKey]}
                     </Text>
-                  </View>
-
-                  <View style={styles.metricContent}>
-                    <Text style={styles.metricValue}>{Math.round(value)}</Text>
-                    <Text
-                      style={[
-                        styles.metricGrowth,
-                        growthRate >= 0 ? styles.positiveGrowth : styles.negativeGrowth
-                      ]}
-                    >
-                      {growthRate > 0 ? '+' : ''}{growthRate}%
-                    </Text>
-                  </View>
-
-                  <View style={styles.metricBarContainer}>
-                    <View
-                      style={[
-                        styles.metricBar,
-                        { width: `${Math.min(100, value)}%` },
-                      ]}
-                    />
-                  </View>
-
-                  <Text style={styles.metricDescription}>
-                    {METRIC_DESCRIPTIONS[metricKey]}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+                  </TouchableOpacity>
+                );
+              })}
           </View>
 
           {/* Tips for improvement */}

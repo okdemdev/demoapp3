@@ -33,7 +33,21 @@ interface Task {
 }
 
 // Define a type for FontAwesome icons we're using
-type FontAwesomeIconType = 'book' | 'heartbeat' | 'bullseye' | 'trophy' | 'clock-o' | 'check-circle' | 'times-circle' | 'hand-o-left' | 'check' | 'times' | 'star' | 'bar-chart' | 'line-chart' | 'arrow-up';
+type FontAwesomeIconType =
+  | 'book'
+  | 'heartbeat'
+  | 'bullseye'
+  | 'trophy'
+  | 'clock-o'
+  | 'check-circle'
+  | 'times-circle'
+  | 'hand-o-left'
+  | 'check'
+  | 'times'
+  | 'star'
+  | 'bar-chart'
+  | 'line-chart'
+  | 'arrow-up';
 
 export default function TodoScreen() {
   const insets = useSafeAreaInsets();
@@ -168,10 +182,13 @@ export default function TodoScreen() {
   // Save current day information
   const saveDayInfo = async (day: number) => {
     try {
-      await AsyncStorage.setItem('dayTracker', JSON.stringify({
-        day,
-        lastUpdated: new Date().toISOString(),
-      }));
+      await AsyncStorage.setItem(
+        'dayTracker',
+        JSON.stringify({
+          day,
+          lastUpdated: new Date().toISOString(),
+        })
+      );
     } catch (error) {
       console.error('Error saving day info:', error);
     }
@@ -219,7 +236,10 @@ export default function TodoScreen() {
   };
 
   // Get task details based on metric
-  const getTaskForMetric = (metric: MetricKey, index: number): Partial<Task> => {
+  const getTaskForMetric = (
+    metric: MetricKey,
+    index: number
+  ): Partial<Task> => {
     switch (metric) {
       case 'wisdom':
         return {
@@ -271,7 +291,7 @@ export default function TodoScreen() {
     console.log('⭐ Attempting to complete task:', taskId);
 
     // Find the task in our local state
-    const taskIndex = tasks.findIndex(t => t.id === taskId);
+    const taskIndex = tasks.findIndex((t) => t.id === taskId);
     if (taskIndex === -1) {
       console.error('❌ Task not found:', taskId);
       return;
@@ -281,7 +301,7 @@ export default function TodoScreen() {
     console.log('📋 Task to complete:', taskToComplete);
 
     // Create a completely new array (to ensure React detects the change)
-    const newTasks = tasks.map(task =>
+    const newTasks = tasks.map((task) =>
       task.id === taskId
         ? { ...task, completed: true, skipped: false }
         : { ...task }
@@ -289,15 +309,25 @@ export default function TodoScreen() {
 
     // Set the new tasks array
     console.log('📊 Setting new tasks array');
-    console.log('Before update:', tasks.map(t => `${t.title}: ${t.completed ? 'completed' : 'pending'}`));
-    console.log('After update:', newTasks.map(t => `${t.title}: ${t.completed ? 'completed' : 'pending'}`));
+    console.log(
+      'Before update:',
+      tasks.map((t) => `${t.title}: ${t.completed ? 'completed' : 'pending'}`)
+    );
+    console.log(
+      'After update:',
+      newTasks.map(
+        (t) => `${t.title}: ${t.completed ? 'completed' : 'pending'}`
+      )
+    );
 
     setTasks(newTasks);
 
     // Update the metrics if they exist
     if (userData?.metrics) {
       console.log('📈 Current metrics:', userData.metrics);
-      console.log(`📊 Adding ${taskToComplete.points} points to ${taskToComplete.metric}`);
+      console.log(
+        `📊 Adding ${taskToComplete.points} points to ${taskToComplete.metric}`
+      );
 
       // Update the after stats for UI display
       const newAfterStats = { ...afterStats };
@@ -319,7 +349,7 @@ export default function TodoScreen() {
   const skipTask = (taskId: string) => {
     console.log('Skipping task:', taskId);
 
-    const updatedTasks = tasks.map(task => {
+    const updatedTasks = tasks.map((task) => {
       if (task.id === taskId) {
         return { ...task, completed: false, skipped: true };
       }
@@ -350,7 +380,9 @@ export default function TodoScreen() {
 
   // Task Card Component with swipe functionality
   const TaskCard = ({ task }: { task: Task }) => {
-    console.log(`Rendering task ${task.id}: ${task.completed ? 'COMPLETED' : 'PENDING'}`);
+    console.log(
+      `Rendering task ${task.id}: ${task.completed ? 'COMPLETED' : 'PENDING'}`
+    );
 
     // For completed tasks, show a different card
     if (task.completed) {
@@ -361,13 +393,16 @@ export default function TodoScreen() {
               <View style={styles.completedIndicator}>
                 <FontAwesome name="check-circle" size={24} color="#fff" />
               </View>
-              <Text style={[styles.taskTitle, styles.completedText]}>{task.title}</Text>
+              <Text style={[styles.taskTitle, styles.completedText]}>
+                {task.title}
+              </Text>
               <Text style={[styles.taskDescription, styles.completedText]}>
                 Completed! +{task.points} {task.metric}
               </Text>
               <View style={styles.taskStats}>
                 <Text style={[styles.completedText, { marginTop: 8 }]}>
-                  Well done! You've earned {task.points} points for your {task.metric}.
+                  Well done! You've earned {task.points} points for your{' '}
+                  {task.metric}.
                 </Text>
               </View>
             </View>
@@ -385,7 +420,9 @@ export default function TodoScreen() {
               <View style={styles.skippedIndicator}>
                 <FontAwesome name="times-circle" size={24} color="#fff" />
               </View>
-              <Text style={[styles.taskTitle, styles.skippedText]}>{task.title}</Text>
+              <Text style={[styles.taskTitle, styles.skippedText]}>
+                {task.title}
+              </Text>
               <Text style={[styles.taskDescription, styles.skippedText]}>
                 You decided to skip this task
               </Text>
@@ -432,10 +469,7 @@ export default function TodoScreen() {
     return (
       <View style={styles.taskCardContainer}>
         <Animated.View
-          style={[
-            styles.taskCard,
-            { transform: [{ translateX: pan.x }] },
-          ]}
+          style={[styles.taskCard, { transform: [{ translateX: pan.x }] }]}
           {...panResponder.panHandlers}
         >
           <View style={styles.taskImageContainer}>
@@ -462,7 +496,7 @@ export default function TodoScreen() {
                       key={i}
                       name="star"
                       size={16}
-                      color={i < task.difficulty ? "#fff" : "#555"}
+                      color={i < task.difficulty ? '#fff' : '#555'}
                       style={styles.star}
                     />
                   ))}
@@ -506,21 +540,29 @@ export default function TodoScreen() {
   };
 
   // Helper to get FontAwesome icon name for metric (in TaskCard)
-  const getFontAwesomeIconForMetric = (metric: MetricKey): FontAwesomeIconType => {
+  const getFontAwesomeIconForMetric = (
+    metric: MetricKey
+  ): FontAwesomeIconType => {
     switch (metric) {
-      case 'wisdom': return 'book';
-      case 'strength': return 'heartbeat';
-      case 'focus': return 'bullseye';
-      case 'confidence': return 'trophy';
-      case 'discipline': return 'clock-o';
-      default: return 'check-circle';
+      case 'wisdom':
+        return 'book';
+      case 'strength':
+        return 'heartbeat';
+      case 'focus':
+        return 'bullseye';
+      case 'confidence':
+        return 'trophy';
+      case 'discipline':
+        return 'clock-o';
+      default:
+        return 'check-circle';
     }
   };
 
   // Helper to get Ionicons name for metric (in Modal)
   const getIoniconsForMetric = (metric: MetricKey): any => {
     const icons: Record<MetricKey, string> = {
-      wisdom: 'brain-outline',
+      wisdom: 'brain',
       strength: 'barbell-outline',
       focus: 'eye-outline',
       confidence: 'sunny-outline',
@@ -530,8 +572,8 @@ export default function TodoScreen() {
   };
 
   // Count completed and skipped tasks
-  const completedCount = tasks.filter(t => t.completed).length;
-  const skippedCount = tasks.filter(t => t.skipped).length;
+  const completedCount = tasks.filter((t) => t.completed).length;
+  const skippedCount = tasks.filter((t) => t.skipped).length;
   const pendingCount = tasks.length - completedCount - skippedCount;
 
   // Function to calculate overall score
@@ -540,7 +582,7 @@ export default function TodoScreen() {
 
     return Math.round(
       Object.values(metrics).reduce((sum, value) => sum + value, 0) /
-      Object.keys(metrics).length
+        Object.keys(metrics).length
     );
   };
 
@@ -562,7 +604,7 @@ export default function TodoScreen() {
           <Animated.View
             style={[
               styles.modalContainer,
-              { transform: [{ translateY: modalAnimation }] }
+              { transform: [{ translateY: modalAnimation }] },
             ]}
           >
             <TouchableOpacity
@@ -572,7 +614,10 @@ export default function TodoScreen() {
               <Ionicons name="close" size={24} color="#fff" />
             </TouchableOpacity>
 
-            <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+            >
               <Text style={styles.modalSubtitle}>
                 Today's metrics show your progress after completing tasks
               </Text>
@@ -594,9 +639,7 @@ export default function TodoScreen() {
                 </View>
               </View>
 
-              <Text style={styles.sectionTitle}>
-                Today's Impact
-              </Text>
+              <Text style={styles.sectionTitle}>Today's Impact</Text>
 
               {/* Individual metrics cards */}
               <View style={styles.metricsGrid}>
@@ -617,7 +660,9 @@ export default function TodoScreen() {
                           {key.charAt(0).toUpperCase() + key.slice(1)}
                         </Text>
                       </View>
-                      <Text style={styles.metricValue}>{Math.round(value)}</Text>
+                      <Text style={styles.metricValue}>
+                        {Math.round(value)}
+                      </Text>
                       <View style={styles.metricBarContainer}>
                         <View
                           style={[
@@ -641,7 +686,9 @@ export default function TodoScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.dayCounter}>Day {currentDay}/{totalDays}</Text>
+        <Text style={styles.dayCounter}>
+          Day {currentDay}/{totalDays}
+        </Text>
         <View style={styles.navigationButtons}>
           <TouchableOpacity onPress={goToPreviousDay} style={styles.navButton}>
             <FontAwesome name="chevron-left" size={20} color="#fff" />
@@ -669,10 +716,12 @@ export default function TodoScreen() {
 
       {/* Task Cards */}
       <ScrollView style={styles.tasksContainer}>
-        {tasks.map(task => (
+        {tasks.map((task) => (
           // Use a key that includes the completed state to force re-render
           <TaskCard
-            key={`${task.id}-${task.completed ? 'completed' : 'pending'}-${task.skipped ? 'skipped' : 'active'}`}
+            key={`${task.id}-${task.completed ? 'completed' : 'pending'}-${
+              task.skipped ? 'skipped' : 'active'
+            }`}
             task={task}
           />
         ))}
@@ -691,19 +740,24 @@ export default function TodoScreen() {
         )}
 
         {/* Space at the bottom when all tasks are completed */}
-        {tasks.length > 0 && tasks.every(t => t.completed || t.skipped) && (
+        {tasks.length > 0 && tasks.every((t) => t.completed || t.skipped) && (
           <View style={{ height: 20 }} />
         )}
       </ScrollView>
 
       {/* Stats Button - only show when all tasks are completed */}
-      {tasks.length > 0 && tasks.every(t => t.completed || t.skipped) && (
+      {tasks.length > 0 && tasks.every((t) => t.completed || t.skipped) && (
         <TouchableOpacity
           style={styles.statsButton}
           onPress={() => setShowStatsModal(true)}
         >
           <Text style={styles.statsButtonText}>Today's Gains</Text>
-          <Ionicons name="stats-chart" size={20} color="#fff" style={styles.statsButtonIcon} />
+          <Ionicons
+            name="stats-chart"
+            size={20}
+            color="#fff"
+            style={styles.statsButtonIcon}
+          />
         </TouchableOpacity>
       )}
 
@@ -719,7 +773,9 @@ export default function TodoScreen() {
               <Text style={styles.statsColumnTitle}>Before</Text>
               {Object.entries(beforeStats).map(([key, value]) => (
                 <View key={key} style={styles.statRow}>
-                  <Text style={styles.statName}>{key.charAt(0).toUpperCase() + key.slice(1)}</Text>
+                  <Text style={styles.statName}>
+                    {key.charAt(0).toUpperCase() + key.slice(1)}
+                  </Text>
                   <Text style={styles.statValue}>{value}</Text>
                 </View>
               ))}
@@ -729,10 +785,14 @@ export default function TodoScreen() {
               <Text style={styles.statsColumnTitle}>After</Text>
               {Object.entries(afterStats).map(([key, value]) => (
                 <View key={key} style={styles.statRow}>
-                  <Text style={styles.statName}>{key.charAt(0).toUpperCase() + key.slice(1)}</Text>
+                  <Text style={styles.statName}>
+                    {key.charAt(0).toUpperCase() + key.slice(1)}
+                  </Text>
                   <Text style={styles.statValue}>{value}</Text>
                   {value > beforeStats[key as MetricKey] && (
-                    <Text style={styles.statDiff}>+{value - beforeStats[key as MetricKey]}</Text>
+                    <Text style={styles.statDiff}>
+                      +{value - beforeStats[key as MetricKey]}
+                    </Text>
                   )}
                 </View>
               ))}

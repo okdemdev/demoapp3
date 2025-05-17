@@ -27,7 +27,7 @@ function clamp(val: number, min: number, max: number): number {
 type MetricKey = 'wisdom' | 'strength' | 'focus' | 'confidence' | 'discipline';
 
 const METRIC_ICONS: Record<MetricKey, string> = {
-  wisdom: 'brain-outline',
+  wisdom: 'brain',
   strength: 'barbell-outline',
   focus: 'eye-outline',
   confidence: 'sunny-outline',
