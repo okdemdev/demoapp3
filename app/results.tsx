@@ -474,6 +474,16 @@ export default function ResultsScreen() {
     router.replace('/plan');
   };
 
+  const navigateToPotentialRatings = () => {
+    // Pass current metrics to the potential ratings page
+    router.push({
+      pathname: '/potential-ratings' as any,
+      params: {
+        metrics: JSON.stringify(metrics)
+      }
+    });
+  };
+
   if (isLoading || !userData) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -627,8 +637,8 @@ export default function ResultsScreen() {
               ))}
             </View>
 
-            <Pressable style={styles.ctaButton} onPress={handleSubscribe}>
-              <Text style={styles.ctaButtonText}>Start Your Reset Program</Text>
+            <Pressable style={styles.ctaButton} onPress={navigateToPotentialRatings}>
+              <Text style={styles.ctaButtonText}>See Potential Ratings</Text>
             </Pressable>
           </View>
         </ScrollView>
