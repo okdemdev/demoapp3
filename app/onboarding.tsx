@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
     FlatList,
     NativeScrollEvent,
