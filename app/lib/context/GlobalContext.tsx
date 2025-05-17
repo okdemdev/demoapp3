@@ -5,6 +5,13 @@ import {
   getSubscription,
   saveSubscription,
 } from '../subscriptionStorage';
+import { clearTodos, getTodos, saveTodos } from '../todoStorage';
+
+export interface Todo {
+  id: string;
+  text: string;
+  completed: boolean;
+}
 
 // Define all possible data types that can be stored
 export interface GlobalData {
@@ -19,6 +26,7 @@ export interface GlobalData {
     subscribedAt: string;
     active: boolean;
   };
+  todos: Todo[];
 }
 
 interface GlobalContextType {
@@ -31,6 +39,9 @@ interface GlobalContextType {
   updateQuizInsight: (questionId: number, insight: string) => Promise<void>;
   updateSubscription: (active: boolean) => Promise<void>;
   clearUserData: () => Promise<void>;
+  addTodo: (text: string) => Promise<void>;
+  toggleTodo: (id: string) => Promise<void>;
+  uncheckAllTodos: () => Promise<void>;
 }
 
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
@@ -48,6 +59,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     try {
       const quizData = await getQuizData();
       const subscriptionData = await getSubscription();
+      const storedTodos = await getTodos();
 
       setUserData({
         quiz: {
@@ -56,6 +68,32 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           insights: {},
         },
         subscription: subscriptionData || undefined,
+        todos:
+          storedTodos.length > 0
+            ? storedTodos
+            : [
+                {
+                  id: '1',
+                  text: 'Take a 10-minute meditation break',
+                  completed: false,
+                },
+                {
+                  id: '2',
+                  text: 'Drink 8 glasses of water today',
+                  completed: false,
+                },
+                { id: '3', text: 'Go for a 30-minute walk', completed: false },
+                {
+                  id: '4',
+                  text: 'Practice deep breathing exercises',
+                  completed: false,
+                },
+                {
+                  id: '5',
+                  text: "Write down 3 things you're grateful for",
+                  completed: false,
+                },
+              ],
       });
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -133,10 +171,57 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   const clearUserData = async () => {
     try {
       await clearSubscription();
+      await clearTodos();
       setUserData(null);
     } catch (error) {
       console.error('Error clearing user data:', error);
     }
+  };
+
+  const addTodo = async (text: string) => {
+    setUserData((prev) => {
+      if (!prev) return null;
+      const newTodo: Todo = {
+        id: Date.now().toString(),
+        text,
+        completed: false,
+      };
+      const updatedTodos = [...prev.todos, newTodo];
+      saveTodos(updatedTodos);
+      return {
+        ...prev,
+        todos: updatedTodos,
+      };
+    });
+  };
+
+  const toggleTodo = async (id: string) => {
+    setUserData((prev) => {
+      if (!prev) return null;
+      const updatedTodos = prev.todos.map((todo) =>
+        todo.id === id ? { ...todo, completed: !todo.completed } : todo
+      );
+      saveTodos(updatedTodos);
+      return {
+        ...prev,
+        todos: updatedTodos,
+      };
+    });
+  };
+
+  const uncheckAllTodos = async () => {
+    setUserData((prev) => {
+      if (!prev) return null;
+      const updatedTodos = prev.todos.map((todo) => ({
+        ...todo,
+        completed: false,
+      }));
+      saveTodos(updatedTodos);
+      return {
+        ...prev,
+        todos: updatedTodos,
+      };
+    });
   };
 
   return (
@@ -148,6 +233,9 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         updateQuizInsight,
         updateSubscription,
         clearUserData,
+        addTodo,
+        toggleTodo,
+        uncheckAllTodos,
       }}
     >
       {children}
