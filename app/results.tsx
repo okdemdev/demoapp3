@@ -38,7 +38,10 @@ const scoreSchema = z.preprocess((val) => {
 }, z.number().min(0).max(100).int()) as z.ZodType<number>;
 
 // Build context string with both quiz and habits answers
-function buildContextString(quizAnswers: QuizAnswer[], habitsAnswers: HabitsAnswer[]): string {
+function buildContextString(
+  quizAnswers: QuizAnswer[],
+  habitsAnswers: HabitsAnswer[]
+): string {
   const quizContext = quizQuestions
     .filter((q) => q.type !== 'message')
     .map((q) => {
@@ -50,13 +53,18 @@ function buildContextString(quizAnswers: QuizAnswer[], habitsAnswers: HabitsAnsw
 
   const habitsContext = habitsQuestions
     .map((q) => {
-      const userAnswer = habitsAnswers.find((a) => a.questionId === q.id)?.answer;
+      const userAnswer = habitsAnswers.find(
+        (a) => a.questionId === q.id
+      )?.answer;
 
       // Get the label for slider answers instead of just the number
       let displayAnswer = '[No answer]';
       if (userAnswer !== undefined) {
         if (typeof userAnswer === 'number' && q.sliderOptions?.labels) {
-          const index = Math.max(0, Math.min(q.sliderOptions.labels.length - 1, userAnswer - 1));
+          const index = Math.max(
+            0,
+            Math.min(q.sliderOptions.labels.length - 1, userAnswer - 1)
+          );
           displayAnswer = q.sliderOptions.labels[index];
         } else {
           displayAnswer = String(userAnswer);
@@ -192,11 +200,11 @@ function calculateFallbackScore(
 
   // Habit weights for each metric
   const habitWeights: Record<MetricKey, Record<number, number>> = {
-    wisdom: { 1: 1, 7: 2 },  // Wake up time, screen time
-    strength: { 2: 3, 3: 3, 4: 2, 5: 2, 6: 2, 8: 1 },  // Exercise, gym, sit-ups, push-ups, water, cold showers
-    focus: { 1: 1, 7: 3 },  // Wake up time, screen time
-    confidence: { 2: 1, 3: 1, 4: 1, 5: 1 },  // Exercise habits can affect confidence
-    discipline: { 1: 3, 2: 2, 3: 2, 6: 1, 8: 3 },  // Wake up, exercise, gym, water, cold showers
+    wisdom: { 1: 1, 7: 2 }, // Wake up time, screen time
+    strength: { 2: 3, 3: 3, 4: 2, 5: 2, 6: 2, 8: 1 }, // Exercise, gym, sit-ups, push-ups, water, cold showers
+    focus: { 1: 1, 7: 3 }, // Wake up time, screen time
+    confidence: { 2: 1, 3: 1, 4: 1, 5: 1 }, // Exercise habits can affect confidence
+    discipline: { 1: 3, 2: 2, 3: 2, 6: 1, 8: 3 }, // Wake up, exercise, gym, water, cold showers
   };
 
   // Add habits component to the score
@@ -216,7 +224,7 @@ function calculateFallbackScore(
       // For most habits, like exercise, lower numbers are worse (e.g., "I don't run")
       if ([2, 3, 4, 5, 6, 8].includes(questionId)) {
         // Convert 1-5 scale to 0-4 scale
-        answerValue = (answer.answer - 1);
+        answerValue = answer.answer - 1;
       }
       // For wake up time, lower is better (waking up earlier)
       else if (questionId === 1) {
@@ -263,14 +271,23 @@ async function computeMetrics(
 
   for (const metric of metricKeys) {
     try {
-      const score = await getMetricScore(metric, context, quizAnswers, habitsAnswers);
+      const score = await getMetricScore(
+        metric,
+        context,
+        quizAnswers,
+        habitsAnswers
+      );
       metrics[metric] = score;
     } catch (error) {
       console.error(
         `Failed to get score for ${metric}, using fallback:`,
         error
       );
-      metrics[metric] = calculateFallbackScore(metric, quizAnswers, habitsAnswers);
+      metrics[metric] = calculateFallbackScore(
+        metric,
+        quizAnswers,
+        habitsAnswers
+      );
     }
   }
 
@@ -280,7 +297,8 @@ async function computeMetrics(
 export default function ResultsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { userData, isLoading, updateSubscription } = useGlobal();
+  const { userData, isLoading, updateMetrics, updateSubscription } =
+    useGlobal();
   const [metrics, setMetrics] = useState<Record<MetricKey, number> | null>(
     null
   );
@@ -305,6 +323,9 @@ export default function ResultsScreen() {
         userData.habits?.answers || []
       );
       console.timeEnd('Metrics calculation (retry)');
+
+      // Store metrics in global context and local storage
+      await updateMetrics(m);
       setMetrics(m);
     } catch (err) {
       console.error('❌ Error calculating metrics on retry:', err);
@@ -321,6 +342,19 @@ export default function ResultsScreen() {
         setLoadingMetrics(true);
         setError(null);
 
+        // Check if we have recent cached metrics (less than 24 hours old)
+        const hasRecentMetrics =
+          userData.metrics &&
+          userData.lastMetricsUpdate &&
+          Date.now() - userData.lastMetricsUpdate < 24 * 60 * 60 * 1000;
+
+        if (hasRecentMetrics && userData.metrics) {
+          console.log('📊 Using cached metrics');
+          setMetrics(userData.metrics);
+          setLoadingMetrics(false);
+          return;
+        }
+
         try {
           console.time('Metrics calculation');
           const m = await computeMetrics(
@@ -329,7 +363,8 @@ export default function ResultsScreen() {
           );
           console.timeEnd('Metrics calculation');
 
-          console.log('📊 Setting metrics state with calculated values');
+          // Store metrics in global context and local storage
+          await updateMetrics(m);
           setMetrics(m);
         } catch (err) {
           console.error('❌ Error calculating metrics:', err);
@@ -384,7 +419,10 @@ export default function ResultsScreen() {
   }
 
   // Check if habits data is available
-  const hasHabitsData = userData.habits && userData.habits.answers && userData.habits.answers.length > 0;
+  const hasHabitsData =
+    userData.habits &&
+    userData.habits.answers &&
+    userData.habits.answers.length > 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -396,8 +434,8 @@ export default function ResultsScreen() {
         <Text style={styles.title}>Your Assessment Results</Text>
         <Text style={styles.subtitle}>
           {hasHabitsData
-            ? "Here are your key life metrics based on your quiz and habits assessment"
-            : "Here are your key life metrics based on your quiz"}
+            ? 'Here are your key life metrics based on your quiz and habits assessment'
+            : 'Here are your key life metrics based on your quiz'}
         </Text>
         <View style={{ marginBottom: 30 }}>
           {metrics &&
