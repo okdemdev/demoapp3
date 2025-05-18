@@ -906,10 +906,22 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     }
 
     console.log('🔄 Updating task:', taskId, updates);
+    console.log('📝 Current tasks before update:', JSON.stringify(userData.dailyTasks.tasks.map(t => ({ id: t.id, completed: t.completed, skipped: t.skipped }))));
+
+    // Find the task to be updated
+    const taskToUpdate = userData.dailyTasks.tasks.find(task => task.id === taskId);
+    if (!taskToUpdate) {
+      console.error('❌ Task not found in global context:', taskId);
+      return;
+    }
+
+    console.log('🔍 Found task to update:', JSON.stringify(taskToUpdate));
 
     const updatedTasks = userData.dailyTasks.tasks.map((task) =>
       task.id === taskId ? { ...task, ...updates } : task
     );
+
+    console.log('📝 Tasks after update:', JSON.stringify(updatedTasks.map(t => ({ id: t.id, completed: t.completed, skipped: t.skipped }))));
 
     const newData = {
       ...userData,
@@ -920,7 +932,17 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     };
 
     await saveUserData(newData);
-    console.log('✅ Successfully updated task');
+    console.log('✅ Successfully updated task and saved to AsyncStorage');
+
+    // Verify the data was updated in the global context
+    setTimeout(() => {
+      if (userData?.dailyTasks?.tasks) {
+        const verifyTask = userData.dailyTasks.tasks.find(t => t.id === taskId);
+        console.log('🔍 Verification - Task after update in global context:', verifyTask ?
+          JSON.stringify({ id: verifyTask.id, completed: verifyTask.completed, skipped: verifyTask.skipped }) :
+          'Task not found');
+      }
+    }, 100);
   };
 
   const updateVideoGenerationStatus = async (

@@ -90,16 +90,37 @@ export default function TodoScreen() {
 
       if (hasTodaysTasks) {
         console.log('📝 Found existing tasks for day', currentDay);
+        console.log('📊 Global tasks:', JSON.stringify(userData.dailyTasks!.tasks.map(t => ({ id: t.id, completed: t.completed }))));
+        console.log('📊 Local tasks state:', JSON.stringify(tasks.map(t => ({ id: t.id, completed: t.completed }))));
 
         // When loading existing tasks, preserve the local state for tasks that
         // might have been modified during this session
         if (tasks.length === 0) {
           // Only load tasks from userData if we don't have any local tasks yet
           // (this prevents overwriting completed tasks on re-renders)
+          console.log('🔄 Loading tasks from global context into local state');
           setTasks(userData.dailyTasks!.tasks as Task[]);
         } else {
           // We already have tasks, so let's keep our local state
           console.log('🔒 Preserving existing local task state');
+
+          // This approach preserves local completion state but updates other task properties
+          // that might have changed in the global context
+          const mergedTasks = tasks.map(localTask => {
+            const globalTask = userData.dailyTasks!.tasks.find(t => t.id === localTask.id);
+            if (globalTask) {
+              // Keep local completion state but update other properties from global
+              return {
+                ...globalTask,
+                completed: localTask.completed, // Preserve local completion state
+                skipped: localTask.skipped,    // Preserve local skipped state
+              };
+            }
+            return localTask;
+          });
+
+          console.log('📊 Merged tasks:', JSON.stringify(mergedTasks.map(t => ({ id: t.id, completed: t.completed }))));
+          setTasks(mergedTasks);
         }
 
         // Set before/after stats
@@ -386,6 +407,8 @@ export default function TodoScreen() {
   // Complete a task
   const completeTask = (taskId: string) => {
     console.log('⭐ Attempting to complete task:', taskId);
+    console.log('📊 Current tasks state:', JSON.stringify(tasks.map(t => ({ id: t.id, completed: t.completed }))));
+    console.log('🌍 Current userData.dailyTasks:', userData?.dailyTasks ? JSON.stringify(userData.dailyTasks.tasks.map(t => ({ id: t.id, completed: t.completed }))) : 'no dailyTasks');
 
     // Find the task in our local state
     const taskIndex = tasks.findIndex((t) => t.id === taskId);
@@ -405,13 +428,19 @@ export default function TodoScreen() {
     );
 
     // Update the local state right away
+    console.log('🔄 Setting local state with updated tasks');
     setTasks(newTasks);
 
     // Update the task in global context
+    console.log('🌍 Updating task in global context');
     updateDailyTask(taskId, { completed: true, skipped: false });
 
-    // Start a slight delay to allow any animations to complete
+    // After a delay, verify the update was applied
     setTimeout(() => {
+      console.log('✅ Verification after delay - Local tasks:', JSON.stringify(tasks.map(t => ({ id: t.id, completed: t.completed }))));
+      console.log('✅ Verification after delay - Global tasks:', userData?.dailyTasks ? JSON.stringify(userData.dailyTasks.tasks.map(t => ({ id: t.id, completed: t.completed }))) : 'no dailyTasks');
+
+      // Start a slight delay to allow any animations to complete
       // Update the metrics if they exist
       if (userData?.metrics) {
         console.log('📈 Current metrics:', userData.metrics);
@@ -433,7 +462,7 @@ export default function TodoScreen() {
       } else {
         console.error('❌ No metrics found in userData');
       }
-    }, 300); // Short delay to allow animation to complete
+    }, 1000); // Increased delay for better verification
   };
 
   // Skip a task
