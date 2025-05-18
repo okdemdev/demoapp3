@@ -12,23 +12,11 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useGlobal } from '../lib/context/GlobalContext';
+import { DailyTask, MetricKey, useGlobal } from '../lib/context/GlobalContext';
+import { TaskService } from '../lib/services/TaskService';
 
-// Metrics type
-type MetricKey = 'wisdom' | 'strength' | 'focus' | 'confidence' | 'discipline';
-
-// Task interface
-interface Task {
-  id: string;
-  title: string;
-  description: string;
-  metric: MetricKey;
-  points: number;
-  streak: number;
-  repeat: 'Daily' | 'Weekly' | 'Monthly' | 'Custom';
-  difficulty: number; // 1-5
-  completed: boolean;
-  skipped: boolean;
+// Task interface - using DailyTask from GlobalContext
+interface Task extends DailyTask {
   image?: any; // Image source for the task
 }
 
@@ -51,10 +39,12 @@ type FontAwesomeIconType =
 
 export default function TodoScreen() {
   const insets = useSafeAreaInsets();
-  const { userData, toggleTodo, updateMetrics } = useGlobal();
+  const { userData, toggleTodo, updateMetrics, saveDailyTasks, updateDailyTask } = useGlobal();
   const [currentDay, setCurrentDay] = useState(10); // Current day counter
   const [totalDays, setTotalDays] = useState(66); // Total days counter
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [isGeneratingTasks, setIsGeneratingTasks] = useState(false);
+  const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [beforeStats, setBeforeStats] = useState<Record<MetricKey, number>>({
     wisdom: 0,
@@ -84,39 +74,57 @@ export default function TodoScreen() {
     loadDayInfo();
   }, []);
 
-  // Generate daily tasks based on metrics
+  // Mark initial render as complete after the component mounts
   useEffect(() => {
-    // Only generate tasks on initial render or when day changes
-    if (isInitialRender.current) {
-      // Initial render - generate tasks
-      console.log('🔄 Initial task generation');
-      if (userData) {
-        generateDailyTasks();
-        // Save the current stats as "before" stats
+    isInitialRender.current = false;
+  }, []);
+
+  // Check for existing tasks or show welcome screen
+  useEffect(() => {
+    if (userData && currentDay) {
+      // Check if we have tasks for today
+      const hasTodaysTasks = userData.dailyTasks &&
+        userData.dailyTasks.generatedForDay === currentDay &&
+        userData.dailyTasks.tasks &&
+        userData.dailyTasks.tasks.length > 0;
+
+      if (hasTodaysTasks) {
+        console.log('📝 Found existing tasks for day', currentDay);
+        // Load existing tasks
+        setTasks(userData.dailyTasks!.tasks as Task[]);
+
+        // Set before/after stats
         if (userData.metrics) {
           setBeforeStats({ ...userData.metrics });
           setAfterStats({ ...userData.metrics });
         }
+
+        // Hide welcome screen
+        setShowWelcomeScreen(false);
+      } else {
+        console.log('⚠️ No tasks found for day', currentDay);
+        // Show welcome screen to generate tasks
+        setShowWelcomeScreen(true);
+        setTasks([]);
       }
-      isInitialRender.current = false;
-    } else if (currentDayChanged.current) {
-      // Only regenerate on day change
-      console.log('🔄 Day changed - regenerating tasks');
-      if (userData) {
-        generateDailyTasks();
-        // Save the current stats as "before" stats
-        if (userData.metrics) {
-          setBeforeStats({ ...userData.metrics });
-          setAfterStats({ ...userData.metrics });
-        }
-      }
-      currentDayChanged.current = false;
     }
-  }, [userData]); // Only depend on userData, not currentDay
+  }, [userData, currentDay]);
 
   // Update currentDayChanged ref when day changes
   useEffect(() => {
     currentDayChanged.current = true;
+
+    // If day changes, we need to check for tasks again
+    if (!isInitialRender.current && userData) {
+      const hasTodaysTasks = userData.dailyTasks &&
+        userData.dailyTasks.generatedForDay === currentDay;
+
+      if (!hasTodaysTasks) {
+        // Show welcome screen for the new day
+        setShowWelcomeScreen(true);
+        setTasks([]);
+      }
+    }
   }, [currentDay]);
 
   // Update afterStats whenever metrics change
@@ -194,8 +202,76 @@ export default function TodoScreen() {
     }
   };
 
-  const generateDailyTasks = () => {
+  const generateDailyTasks = async () => {
     console.log('📝 Generating daily tasks');
+
+    // Clear any existing tasks first
+    setTasks([]);
+    setIsGeneratingTasks(true);
+
+    if (!userData?.metrics) {
+      console.error('❌ No metrics found in userData for task generation');
+      setIsGeneratingTasks(false);
+      return;
+    }
+
+    try {
+      // Get the task service instance
+      const taskService = TaskService.getInstance();
+
+      // Generate AI tasks based on metrics and current day
+      const aiTasks = await taskService.generateDailyTasks(
+        userData.metrics,
+        currentDay
+      );
+
+      console.log('🧠 AI generated tasks:', aiTasks);
+
+      // Transform AI tasks to our Task interface format
+      const newTasks: Task[] = aiTasks.map((aiTask, index) => {
+        return {
+          id: `task-${Date.now()}-${index}`,
+          title: aiTask.title,
+          description: aiTask.description,
+          metric: aiTask.metric,
+          points: aiTask.points,
+          streak: Math.floor(Math.random() * 15) + 1, // 1-15 days streak
+          repeat: 'Daily',
+          difficulty: aiTask.difficulty,
+          completed: false,
+          skipped: false,
+        };
+      });
+
+      console.log(`📊 Setting ${newTasks.length} new AI-generated tasks`);
+
+      // Set local state
+      setTasks(newTasks);
+
+      // Save to global context for persistence
+      await saveDailyTasks(newTasks, currentDay);
+
+      // Hide welcome screen after generation
+      setShowWelcomeScreen(false);
+
+      // Save the current stats as "before" stats
+      if (userData.metrics) {
+        setBeforeStats({ ...userData.metrics });
+        setAfterStats({ ...userData.metrics });
+      }
+    } catch (error) {
+      console.error('❌ Error generating AI tasks:', error);
+
+      // Fallback to basic tasks if AI generation fails
+      generateFallbackTasks();
+    } finally {
+      setIsGeneratingTasks(false);
+    }
+  };
+
+  // Fallback to original task generation if AI fails
+  const generateFallbackTasks = async () => {
+    console.log('⚠️ Using fallback task generation');
 
     const metrics: MetricKey[] = [
       'wisdom',
@@ -204,9 +280,6 @@ export default function TodoScreen() {
       'confidence',
       'discipline',
     ];
-
-    // Clear any existing tasks first
-    setTasks([]);
 
     const newTasks: Task[] = metrics.map((metric, index) => {
       // Create a task based on the metric type
@@ -226,13 +299,26 @@ export default function TodoScreen() {
         skipped: false,
       };
 
-      console.log(`📋 Created task for ${metric}:`, task.title);
+      console.log(`📋 Created fallback task for ${metric}:`, task.title);
       return task;
     });
 
-    // Set the new tasks
-    console.log(`📊 Setting ${newTasks.length} new tasks`);
+    console.log(`📊 Setting ${newTasks.length} fallback tasks`);
+
+    // Set local state
     setTasks(newTasks);
+
+    // Save to global context for persistence
+    await saveDailyTasks(newTasks, currentDay);
+
+    // Hide welcome screen after generation
+    setShowWelcomeScreen(false);
+
+    // Save the current stats as "before" stats
+    if (userData?.metrics) {
+      setBeforeStats({ ...userData.metrics });
+      setAfterStats({ ...userData.metrics });
+    }
   };
 
   // Get task details based on metric
@@ -320,7 +406,11 @@ export default function TodoScreen() {
       )
     );
 
+    // Update the local state
     setTasks(newTasks);
+
+    // Update the task in global context
+    updateDailyTask(taskId, { completed: true, skipped: false });
 
     // Update the metrics if they exist
     if (userData?.metrics) {
@@ -356,7 +446,11 @@ export default function TodoScreen() {
       return task;
     });
 
+    // Update local state
     setTasks(updatedTasks);
+
+    // Update in global context
+    updateDailyTask(taskId, { completed: false, skipped: true });
   };
 
   // Navigation functions
@@ -582,7 +676,7 @@ export default function TodoScreen() {
 
     return Math.round(
       Object.values(metrics).reduce((sum, value) => sum + value, 0) /
-        Object.keys(metrics).length
+      Object.keys(metrics).length
     );
   };
 
@@ -682,6 +776,46 @@ export default function TodoScreen() {
     );
   };
 
+  // Add this function to render the welcome screen
+  const renderWelcomeScreen = () => {
+    return (
+      <View style={styles.welcomeContainer}>
+        <View style={styles.welcomeIconContainer}>
+          <Ionicons name="calendar-outline" size={64} color="#F37335" />
+        </View>
+
+        <Text style={styles.welcomeTitle}>Ready to win today?</Text>
+        <Text style={styles.welcomeDescription}>
+          Get personalized tasks designed to improve your weakest areas while maintaining your strengths.
+        </Text>
+
+        <TouchableOpacity
+          style={[
+            styles.generateTasksButton,
+            isGeneratingTasks && styles.generatingTasksButton
+          ]}
+          onPress={generateDailyTasks}
+          disabled={isGeneratingTasks}
+        >
+          <Text style={styles.generateTasksButtonText}>
+            {isGeneratingTasks ? 'Generating Tasks...' : "Generate Today's Tasks"}
+          </Text>
+          {isGeneratingTasks ? (
+            <Ionicons name="hourglass-outline" size={24} color="#fff" style={styles.welcomeButtonIcon} />
+          ) : (
+            <Ionicons name="rocket-outline" size={24} color="#fff" style={styles.welcomeButtonIcon} />
+          )}
+        </TouchableOpacity>
+
+        {isGeneratingTasks && (
+          <Text style={styles.generatingHint}>
+            Analyzing your metrics to create the most effective tasks for you...
+          </Text>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
@@ -701,52 +835,66 @@ export default function TodoScreen() {
 
       <Text style={styles.motivationalText}>You are going to make it.</Text>
 
-      {/* Task Stats */}
-      <View style={styles.taskStatsContainer}>
-        <View style={styles.statsBadge}>
-          <Text style={styles.statsText}>To-dos ({pendingCount})</Text>
-        </View>
-        <View style={[styles.statsBadge, styles.doneBadge]}>
-          <Text style={styles.statsText}>Done ({completedCount})</Text>
-        </View>
-        <View style={[styles.statsBadge, styles.skippedBadge]}>
-          <Text style={styles.statsText}>Skipped ({skippedCount})</Text>
-        </View>
-      </View>
-
-      {/* Task Cards */}
-      <ScrollView style={styles.tasksContainer}>
-        {tasks.map((task) => (
-          // Use a key that includes the completed state to force re-render
-          <TaskCard
-            key={`${task.id}-${task.completed ? 'completed' : 'pending'}-${
-              task.skipped ? 'skipped' : 'active'
-            }`}
-            task={task}
-          />
-        ))}
-
-        {/* If no tasks are available */}
-        {tasks.length === 0 && (
-          <View style={styles.allDoneContainer}>
-            <Text style={styles.allDoneText}>No tasks available for today</Text>
-            <TouchableOpacity
-              style={styles.generateButton}
-              onPress={generateDailyTasks}
-            >
-              <Text style={styles.generateButtonText}>Generate New Tasks</Text>
-            </TouchableOpacity>
+      {/* Task Stats - only show when not on welcome screen */}
+      {!showWelcomeScreen && (
+        <View style={styles.taskStatsContainer}>
+          <View style={styles.statsBadge}>
+            <Text style={styles.statsText}>To-dos ({pendingCount})</Text>
           </View>
-        )}
+          <View style={[styles.statsBadge, styles.doneBadge]}>
+            <Text style={styles.statsText}>Done ({completedCount})</Text>
+          </View>
+          <View style={[styles.statsBadge, styles.skippedBadge]}>
+            <Text style={styles.statsText}>Skipped ({skippedCount})</Text>
+          </View>
+        </View>
+      )}
 
-        {/* Space at the bottom when all tasks are completed */}
-        {tasks.length > 0 && tasks.every((t) => t.completed || t.skipped) && (
-          <View style={{ height: 20 }} />
-        )}
-      </ScrollView>
+      {/* Welcome Screen or Task Cards */}
+      {showWelcomeScreen ? (
+        renderWelcomeScreen()
+      ) : (
+        <ScrollView style={styles.tasksContainer}>
+          {isGeneratingTasks ? (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Generating personalized tasks...</Text>
+              <Text style={styles.loadingSubText}>Analyzing your metrics to create tasks tailored to your needs</Text>
+            </View>
+          ) : (
+            <>
+              {tasks.map((task) => (
+                // Use a key that includes the completed state to force re-render
+                <TaskCard
+                  key={`${task.id}-${task.completed ? 'completed' : 'pending'}-${task.skipped ? 'skipped' : 'active'
+                    }`}
+                  task={task}
+                />
+              ))}
+
+              {/* If no tasks are available */}
+              {tasks.length === 0 && (
+                <View style={styles.allDoneContainer}>
+                  <Text style={styles.allDoneText}>No tasks available for today</Text>
+                  <TouchableOpacity
+                    style={styles.generateButton}
+                    onPress={generateDailyTasks}
+                  >
+                    <Text style={styles.generateButtonText}>Generate New Tasks</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Space at the bottom when all tasks are completed */}
+              {tasks.length > 0 && tasks.every((t) => t.completed || t.skipped) && (
+                <View style={{ height: 20 }} />
+              )}
+            </>
+          )}
+        </ScrollView>
+      )}
 
       {/* Stats Button - only show when all tasks are completed */}
-      {tasks.length > 0 && tasks.every((t) => t.completed || t.skipped) && (
+      {!showWelcomeScreen && tasks.length > 0 && tasks.every((t) => t.completed || t.skipped) && (
         <TouchableOpacity
           style={styles.statsButton}
           onPress={() => setShowStatsModal(true)}
@@ -763,43 +911,6 @@ export default function TodoScreen() {
 
       {/* Render the modal */}
       {renderStatsModal()}
-
-      {/* Stats Panel */}
-      {showStats && (
-        <View style={styles.statsPanel}>
-          <Text style={styles.statsPanelTitle}>Stats for Day {currentDay}</Text>
-          <View style={styles.statsComparison}>
-            <View style={styles.statsColumn}>
-              <Text style={styles.statsColumnTitle}>Before</Text>
-              {Object.entries(beforeStats).map(([key, value]) => (
-                <View key={key} style={styles.statRow}>
-                  <Text style={styles.statName}>
-                    {key.charAt(0).toUpperCase() + key.slice(1)}
-                  </Text>
-                  <Text style={styles.statValue}>{value}</Text>
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.statsColumn}>
-              <Text style={styles.statsColumnTitle}>After</Text>
-              {Object.entries(afterStats).map(([key, value]) => (
-                <View key={key} style={styles.statRow}>
-                  <Text style={styles.statName}>
-                    {key.charAt(0).toUpperCase() + key.slice(1)}
-                  </Text>
-                  <Text style={styles.statValue}>{value}</Text>
-                  {value > beforeStats[key as MetricKey] && (
-                    <Text style={styles.statDiff}>
-                      +{value - beforeStats[key as MetricKey]}
-                    </Text>
-                  )}
-                </View>
-              ))}
-            </View>
-          </View>
-        </View>
-      )}
     </View>
   );
 }
@@ -1274,5 +1385,83 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
     lineHeight: 20,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    marginTop: 60,
+  },
+  loadingText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  loadingSubText: {
+    fontSize: 16,
+    color: '#aaa',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  welcomeContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 30,
+    marginTop: 20,
+  },
+  welcomeTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  welcomeDescription: {
+    fontSize: 18,
+    color: '#aaa',
+    textAlign: 'center',
+    marginBottom: 40,
+    lineHeight: 24,
+  },
+  generateTasksButton: {
+    backgroundColor: '#F37335',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 6,
+    marginTop: 20,
+  },
+  welcomeButtonIcon: {
+    marginLeft: 10,
+  },
+  generateTasksButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 18,
+  },
+  welcomeIconContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 8,
+    marginBottom: 16,
+  },
+  generatingTasksButton: {
+    backgroundColor: '#4a90e2',
+  },
+  generatingHint: {
+    color: '#aaa',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 16,
   },
 });
