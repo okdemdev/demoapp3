@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { ResizeMode, Video } from 'expo-av';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -13,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGlobal } from '../lib/context/GlobalContext';
 import { PlanService } from '../lib/services/PlanService';
 import { VideoService } from '../lib/services/VideoService';
+import { VideoTheme } from '../lib/videoMapping';
 
 export default function PlanScreen() {
   const insets = useSafeAreaInsets();
@@ -22,7 +24,9 @@ export default function PlanScreen() {
   const [narrationScript, setNarrationScript] = useState<string | null>(null);
   const [words, setWords] = useState<string[]>([]);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
+  const [videoTheme, setVideoTheme] = useState<VideoTheme | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const videoRef = useRef<Video>(null);
 
   const generatePlan = useCallback(async () => {
     if (!userData) return;
@@ -64,29 +68,44 @@ export default function PlanScreen() {
       });
 
       const videoService = VideoService.getInstance();
-      const { script, words: newWords } = await videoService.generatePlanVideo(
-        userData.plan
-      );
+
+      // First generate the script and prepare everything
+      const {
+        script,
+        words: newWords,
+        videoTheme: newTheme,
+      } = await videoService.generatePlanVideo(userData.plan);
 
       setNarrationScript(script);
       setWords(newWords);
       setCurrentWordIndex(0);
+      setVideoTheme(newTheme);
 
-      // Start word animation
-      let index = 0;
-      const interval = setInterval(() => {
-        if (index < newWords.length) {
-          animateWord(index);
-          index++;
-        } else {
-          clearInterval(interval);
-        }
-      }, 500); // Change word every 500ms
-
-      // Update status to completed
+      // Update status to completed before starting playback
       await updateVideoGenerationStatus({
         status: 'completed',
       });
+
+      // Start video playback
+      if (videoRef.current) {
+        await videoRef.current.playAsync();
+      }
+
+      // Start word animation immediately when speech starts
+      const startAnimation = () => {
+        let index = 0;
+        const interval = setInterval(() => {
+          if (index < newWords.length) {
+            animateWord(index);
+            index++;
+          } else {
+            clearInterval(interval);
+          }
+        }, 500); // Change word every 500ms
+      };
+
+      // Start speech with animation callback after loading is complete
+      await videoService.speakText(script, startAnimation);
     } catch (error) {
       console.error('Error generating presentation:', error);
       await updateVideoGenerationStatus({
@@ -100,18 +119,28 @@ export default function PlanScreen() {
     try {
       setCurrentWordIndex(0);
       const videoService = VideoService.getInstance();
-      await videoService.replayLastScript();
 
-      // Restart word animation
-      let index = 0;
-      const interval = setInterval(() => {
-        if (index < words.length) {
-          animateWord(index);
-          index++;
-        } else {
-          clearInterval(interval);
-        }
-      }, 500);
+      // Restart video
+      if (videoRef.current) {
+        await videoRef.current.setPositionAsync(0);
+        await videoRef.current.playAsync();
+      }
+
+      // Start word animation immediately when speech starts
+      const startAnimation = () => {
+        let index = 0;
+        const interval = setInterval(() => {
+          if (index < words.length) {
+            animateWord(index);
+            index++;
+          } else {
+            clearInterval(interval);
+          }
+        }, 500);
+      };
+
+      // Start speech with animation callback
+      await videoService.replayLastScript(startAnimation);
     } catch (error) {
       console.error('Error replaying presentation:', error);
     }
@@ -136,11 +165,11 @@ export default function PlanScreen() {
         </View>
       );
     }
-    if (isVideoCompleted && narrationScript) {
+    if (isVideoCompleted && narrationScript && videoTheme) {
       return (
         <View style={styles.presentationContainer}>
           <View style={styles.presentationHeader}>
-            <Text style={styles.presentationTitle}>Your Plan Presentation</Text>
+            <Text style={styles.presentationTitle}>{videoTheme.title}</Text>
             <TouchableOpacity
               style={styles.controlButton}
               onPress={replayPresentation}
@@ -148,10 +177,23 @@ export default function PlanScreen() {
               <Ionicons name="play-circle" size={24} color="#4CAF50" />
             </TouchableOpacity>
           </View>
-          <View style={styles.wordContainer}>
-            <Animated.Text style={[styles.currentWord, { opacity: fadeAnim }]}>
-              {words[currentWordIndex]}
-            </Animated.Text>
+          <View style={styles.videoContainer}>
+            <Video
+              ref={videoRef}
+              source={videoTheme.assetPath}
+              style={styles.video}
+              resizeMode={ResizeMode.COVER}
+              isLooping
+              isMuted
+              shouldPlay={false}
+            />
+            <View style={styles.wordOverlay}>
+              <Animated.Text
+                style={[styles.currentWord, { opacity: fadeAnim }]}
+              >
+                {words[currentWordIndex]}
+              </Animated.Text>
+            </View>
           </View>
           <Text style={styles.narrationScript}>{narrationScript}</Text>
         </View>
@@ -360,20 +402,30 @@ const styles = StyleSheet.create({
   controlButton: {
     padding: 5,
   },
-  wordContainer: {
-    backgroundColor: '#333333',
+  videoContainer: {
+    height: 200,
     borderRadius: 10,
-    padding: 20,
+    overflow: 'hidden',
     marginBottom: 15,
-    alignItems: 'center',
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+  },
+  wordOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center',
-    minHeight: 100,
+    alignItems: 'center',
   },
   currentWord: {
     color: '#ffffff',
     fontSize: 24,
     fontWeight: 'bold',
     textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.75)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 5,
   },
   narrationScript: {
     color: '#ffffff',

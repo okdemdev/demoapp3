@@ -1,6 +1,13 @@
 import * as Speech from 'expo-speech';
 import { Plan } from '../planStorage';
+import { VideoTheme, findBestMatchingVideo } from '../videoMapping';
 import OpenAIService from './OpenAIService';
+
+export interface PresentationData {
+  script: string;
+  words: string[];
+  videoTheme: VideoTheme;
+}
 
 export class VideoService {
   private static instance: VideoService;
@@ -51,12 +58,15 @@ ${JSON.stringify(plan, null, 2)}`;
     return cleanScript;
   }
 
-  private async textToSpeech(text: string): Promise<void> {
+  public async speakText(text: string, onStart?: () => void): Promise<void> {
     console.log('🗣️ Starting text-to-speech...');
     return new Promise((resolve, reject) => {
       Speech.speak(text, {
         rate: 0.9, // Slightly slower for clarity
-        onStart: () => console.log('🎤 Speech started'),
+        onStart: () => {
+          console.log('🎤 Speech started');
+          onStart?.();
+        },
         onDone: () => {
           console.log('✅ Speech completed');
           resolve();
@@ -69,9 +79,7 @@ ${JSON.stringify(plan, null, 2)}`;
     });
   }
 
-  public async generatePlanVideo(
-    plan: Plan
-  ): Promise<{ script: string; words: string[] }> {
+  public async generatePlanVideo(plan: Plan): Promise<PresentationData> {
     try {
       console.log('🎥 Starting presentation generation...');
 
@@ -81,22 +89,23 @@ ${JSON.stringify(plan, null, 2)}`;
       // 2. Split script into words for animation
       const words = script.split(' ');
 
-      // 3. Start narration
-      await this.textToSpeech(script);
+      // 3. Find matching video theme
+      const videoTheme = findBestMatchingVideo(script);
+      console.log('🎥 Selected video theme:', videoTheme.title);
 
-      console.log('🎉 Presentation and narration completed!');
-      return { script, words };
+      console.log('🎉 Presentation generation completed!');
+      return { script, words, videoTheme };
     } catch (error) {
       console.error('❌ Error generating presentation:', error);
       throw error;
     }
   }
 
-  public async replayLastScript(): Promise<void> {
+  public async replayLastScript(onStart?: () => void): Promise<void> {
     if (!this.lastGeneratedScript) {
       throw new Error('No narration available to replay');
     }
-    return this.textToSpeech(this.lastGeneratedScript);
+    return this.speakText(this.lastGeneratedScript, onStart);
   }
 
   public getLastScript(): string | null {
