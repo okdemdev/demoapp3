@@ -156,62 +156,6 @@ export default function PlanScreen() {
   const isVideoCompleted = userData?.videoGeneration?.status === 'completed';
   const videoError = userData?.videoGeneration?.error;
 
-  const renderVideoStatus = () => {
-    if (isGeneratingVideo) {
-      return (
-        <View style={styles.videoStatusContainer}>
-          <ActivityIndicator size="small" color="#ffffff" />
-          <Text style={styles.videoStatusText}>Generating presentation...</Text>
-        </View>
-      );
-    }
-    if (isVideoCompleted && narrationScript && videoTheme) {
-      return (
-        <View style={styles.presentationContainer}>
-          <View style={styles.presentationHeader}>
-            <Text style={styles.presentationTitle}>{videoTheme.title}</Text>
-            <TouchableOpacity
-              style={styles.controlButton}
-              onPress={replayPresentation}
-            >
-              <Ionicons name="play-circle" size={24} color="#4CAF50" />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.videoContainer}>
-            <Video
-              ref={videoRef}
-              source={videoTheme.assetPath}
-              style={styles.video}
-              resizeMode={ResizeMode.COVER}
-              isLooping
-              isMuted
-              shouldPlay={false}
-            />
-            <View style={styles.wordOverlay}>
-              <Animated.Text
-                style={[styles.currentWord, { opacity: fadeAnim }]}
-              >
-                {words[currentWordIndex]}
-              </Animated.Text>
-            </View>
-          </View>
-          <Text style={styles.narrationScript}>{narrationScript}</Text>
-        </View>
-      );
-    }
-    if (videoError) {
-      return (
-        <View style={styles.videoStatusContainer}>
-          <Ionicons name="alert-circle" size={20} color="#f44336" />
-          <Text style={[styles.videoStatusText, { color: '#f44336' }]}>
-            {videoError}
-          </Text>
-        </View>
-      );
-    }
-    return null;
-  };
-
   if (!userData) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -257,9 +201,58 @@ export default function PlanScreen() {
         </View>
       </View>
 
-      {renderVideoStatus()}
-
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {isGeneratingVideo && (
+          <View style={styles.videoStatusContainer}>
+            <ActivityIndicator size="small" color="#ffffff" />
+            <Text style={styles.videoStatusText}>
+              Generating presentation...
+            </Text>
+          </View>
+        )}
+
+        {videoError && (
+          <View style={styles.videoStatusContainer}>
+            <Ionicons name="alert-circle" size={20} color="#f44336" />
+            <Text style={[styles.videoStatusText, { color: '#f44336' }]}>
+              {videoError}
+            </Text>
+          </View>
+        )}
+
+        {isVideoCompleted && narrationScript && videoTheme && (
+          <View style={styles.presentationContainer}>
+            <View style={styles.presentationHeader}>
+              <Text style={styles.presentationTitle}>{videoTheme.title}</Text>
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={replayPresentation}
+              >
+                <Ionicons name="play-circle" size={24} color="#4CAF50" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.videoContainer}>
+              <Video
+                ref={videoRef}
+                source={videoTheme.assetPath}
+                style={styles.video}
+                resizeMode={ResizeMode.COVER}
+                isLooping
+                isMuted
+                shouldPlay={false}
+              />
+              <View style={styles.wordOverlay}>
+                <Animated.Text
+                  style={[styles.currentWord, { opacity: fadeAnim }]}
+                >
+                  {words[currentWordIndex]}
+                </Animated.Text>
+              </View>
+            </View>
+            <Text style={styles.narrationScript}>{narrationScript}</Text>
+          </View>
+        )}
+
         {!error &&
           userData.plan?.weeks.map((week) => (
             <View key={week.weekNumber} style={styles.weekContainer}>
