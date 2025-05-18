@@ -129,7 +129,44 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         // Ensure community data exists
         if (!parsedData.community) {
           parsedData.community = {
-            friendsPosts: [],
+            friendsPosts: [
+              {
+                id: '1',
+                author: 'John',
+                content:
+                  '🎯 Just completed my first week of daily meditation! Feeling more focused and calm already.',
+                timestamp: '3h ago',
+                comments: [
+                  {
+                    id: '1',
+                    author: 'Emma',
+                    content: "That's amazing! Keep it up! 🙌",
+                    timestamp: '2h ago',
+                  },
+                  {
+                    id: '2',
+                    author: 'Sarah',
+                    content: 'Which app are you using?',
+                    timestamp: '1h ago',
+                  },
+                ],
+              },
+              {
+                id: '2',
+                author: 'Lisa',
+                content:
+                  '💪 Hit a new personal record in my workout today! Small wins add up.',
+                timestamp: '5h ago',
+                comments: [
+                  {
+                    id: '3',
+                    author: 'Mike',
+                    content: 'Crushing it! 💪',
+                    timestamp: '4h ago',
+                  },
+                ],
+              },
+            ],
             eventPosts: [
               {
                 id: '1',
@@ -232,7 +269,44 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           },
           plan: planData || undefined,
           community: {
-            friendsPosts: [],
+            friendsPosts: [
+              {
+                id: '1',
+                author: 'John',
+                content:
+                  '🎯 Just completed my first week of daily meditation! Feeling more focused and calm already.',
+                timestamp: '3h ago',
+                comments: [
+                  {
+                    id: '1',
+                    author: 'Emma',
+                    content: "That's amazing! Keep it up! 🙌",
+                    timestamp: '2h ago',
+                  },
+                  {
+                    id: '2',
+                    author: 'Sarah',
+                    content: 'Which app are you using?',
+                    timestamp: '1h ago',
+                  },
+                ],
+              },
+              {
+                id: '2',
+                author: 'Lisa',
+                content:
+                  '💪 Hit a new personal record in my workout today! Small wins add up.',
+                timestamp: '5h ago',
+                comments: [
+                  {
+                    id: '3',
+                    author: 'Mike',
+                    content: 'Crushing it! 💪',
+                    timestamp: '4h ago',
+                  },
+                ],
+              },
+            ],
             eventPosts: [
               {
                 id: '1',
