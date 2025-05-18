@@ -1050,10 +1050,13 @@ export default function TodoScreen() {
               </View>
 
               <Text style={styles.journalPrompt}>How are you feeling today?</Text>
+              <Text style={styles.journalSubtitle}>
+                Reflect on completing "{completedTaskData.title}" - What was challenging? What did you learn?
+              </Text>
 
               <TextInput
                 style={styles.journalInput}
-                placeholder="Share your thoughts..."
+                placeholder="Share your thoughts... Was this task difficult? How do you feel now that you've completed it? Did you notice any improvements in yourself?"
                 placeholderTextColor="#fff8"
                 multiline={true}
                 value={journalEntry}
@@ -1899,7 +1902,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     marginTop: 20,
+    marginBottom: 5,
+  },
+  journalSubtitle: {
+    fontSize: 16,
+    color: '#fffc',
     marginBottom: 15,
+    lineHeight: 22,
   },
   journalInput: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
