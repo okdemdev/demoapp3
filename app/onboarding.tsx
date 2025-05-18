@@ -57,47 +57,56 @@ const ShipIllustration = () => (
 );
 
 // Planning illustration - represents systems and plans
-const PlanningIllustration = () => (
-    <Svg width={240} height={160} viewBox="0 0 240 160">
-        {/* Calendar/Planner */}
-        <Rect x="40" y="30" width="160" height="100" fill="rgba(255,255,255,0.9)" rx="6" />
-        <Rect x="40" y="30" width="160" height="20" fill="#D32F2F" rx="6" />
-
-        {/* Calendar days */}
-        <G transform="translate(50, 60)">
-            {Array.from({ length: 5 }).map((_, row) =>
-                Array.from({ length: 7 }).map((_, col) => (
-                    <React.Fragment key={`${row}-${col}`}>
-                        <Rect
-                            x={col * 20}
-                            y={row * 14}
-                            width="18"
-                            height="12"
-                            fill="rgba(255,255,255,0.3)"
+const PlanningIllustration = () => {
+    // Pre-compute the calendar cells to avoid inline map functions in JSX
+    const calendarCells = [];
+    for (let row = 0; row < 5; row++) {
+        for (let col = 0; col < 7; col++) {
+            const key = `${row}-${col}`;
+            calendarCells.push(
+                <React.Fragment key={key}>
+                    <Rect
+                        x={col * 20}
+                        y={row * 14}
+                        width="18"
+                        height="12"
+                        fill="rgba(255,255,255,0.3)"
+                        stroke="#D32F2F"
+                        strokeWidth="0.5"
+                    />
+                    {Math.random() > 0.7 && (
+                        <Path
+                            d={`M${col * 20 + 4},${row * 14 + 6} L${col * 20 + 14},${row * 14 + 6}`}
                             stroke="#D32F2F"
-                            strokeWidth="0.5"
+                            strokeWidth="1.5"
                         />
-                        {Math.random() > 0.7 && (
-                            <Path
-                                d={`M${col * 20 + 4},${row * 14 + 6} L${col * 20 + 14},${row * 14 + 6}`}
-                                stroke="#D32F2F"
-                                strokeWidth="1.5"
-                            />
-                        )}
-                    </React.Fragment>
-                ))
-            )}
-        </G>
+                    )}
+                </React.Fragment>
+            );
+        }
+    }
 
-        {/* Pencil */}
-        <G transform="translate(170, 100) rotate(-45)">
-            <Rect x="0" y="0" width="40" height="8" fill="#FFB74D" />
-            <Path d="M40,0 L50,4 L40,8 Z" fill="#795548" />
-            <Rect x="-10" y="0" width="10" height="8" fill="#EC407A" />
-            <Path d="M-10,0 L-15,4 L-10,8 Z" fill="#EC407A" />
-        </G>
-    </Svg>
-);
+    return (
+        <Svg width={240} height={160} viewBox="0 0 240 160">
+            {/* Calendar/Planner */}
+            <Rect x="40" y="30" width="160" height="100" fill="rgba(255,255,255,0.9)" rx="6" />
+            <Rect x="40" y="30" width="160" height="20" fill="#D32F2F" rx="6" />
+
+            {/* Calendar days */}
+            <G transform="translate(50, 60)">
+                {calendarCells}
+            </G>
+
+            {/* Pencil */}
+            <G transform="translate(170, 100) rotate(-45)">
+                <Rect x="0" y="0" width="40" height="8" fill="#FFB74D" />
+                <Path d="M40,0 L50,4 L40,8 Z" fill="#795548" />
+                <Rect x="-10" y="0" width="10" height="8" fill="#EC407A" />
+                <Path d="M-10,0 L-15,4 L-10,8 Z" fill="#EC407A" />
+            </G>
+        </Svg>
+    );
+};
 
 // Mountain illustration - represents challenges
 const MountainIllustration = () => (
@@ -138,48 +147,67 @@ const MountainIllustration = () => (
 );
 
 // Success illustration - represents hope and success
-const SuccessIllustration = () => (
-    <Svg width={240} height={160} viewBox="0 0 240 160">
-        {/* Background glow */}
-        <Circle cx="120" cy="80" r="60" fill="rgba(255,255,255,0.1)" />
-        <Circle cx="120" cy="80" r="40" fill="rgba(255,255,255,0.2)" />
-
-        {/* Sun/Star */}
-        <Circle cx="120" cy="80" r="25" fill="#FFFFFF" />
-
-        {/* Light rays */}
-        {Array.from({ length: 8 }).map((_, i) => (
+const SuccessIllustration = () => {
+    // Pre-compute the light rays to avoid inline map in JSX
+    const lightRays = [];
+    for (let i = 0; i < 8; i++) {
+        const x = 120 + 50 * Math.cos(i * Math.PI / 4);
+        const y = 80 + 50 * Math.sin(i * Math.PI / 4);
+        lightRays.push(
             <Path
-                key={i}
-                d={`M120,80 L${120 + 50 * Math.cos(i * Math.PI / 4)},${80 + 50 * Math.sin(i * Math.PI / 4)}`}
+                key={`ray-${i}`}
+                d={`M120,80 L${x},${y}`}
                 stroke="white"
                 strokeWidth="2"
                 strokeDasharray="2,3"
             />
-        ))}
+        );
+    }
 
-        {/* Person with arms raised */}
-        <G transform="translate(120, 130)">
-            <Circle cx="0" cy="-15" r="6" fill="white" /> {/* Head */}
-            <Path d="M0,-9 L0,5" stroke="white" strokeWidth="3" /> {/* Body */}
-            <Path d="M0,-5 L-15,-15" stroke="white" strokeWidth="2" /> {/* Left arm up */}
-            <Path d="M0,-5 L15,-15" stroke="white" strokeWidth="2" /> {/* Right arm up */}
-            <Path d="M0,5 L-7,20" stroke="white" strokeWidth="3" /> {/* Left leg */}
-            <Path d="M0,5 L7,20" stroke="white" strokeWidth="3" /> {/* Right leg */}
-        </G>
-
-        {/* Celebration particles */}
-        {Array.from({ length: 15 }).map((_, i) => (
+    // Pre-compute the celebration particles
+    const particles = [];
+    for (let i = 0; i < 15; i++) {
+        const cx = 120 + 80 * Math.random() - 40;
+        const cy = 80 + 80 * Math.random() - 40;
+        const r = 1 + Math.random() * 2;
+        particles.push(
             <Circle
-                key={i}
-                cx={120 + 80 * Math.random() - 40}
-                cy={80 + 80 * Math.random() - 40}
-                r={1 + Math.random() * 2}
+                key={`particle-${i}`}
+                cx={cx}
+                cy={cy}
+                r={r}
                 fill="white"
             />
-        ))}
-    </Svg>
-);
+        );
+    }
+
+    return (
+        <Svg width={240} height={160} viewBox="0 0 240 160">
+            {/* Background glow */}
+            <Circle cx="120" cy="80" r="60" fill="rgba(255,255,255,0.1)" />
+            <Circle cx="120" cy="80" r="40" fill="rgba(255,255,255,0.2)" />
+
+            {/* Sun/Star */}
+            <Circle cx="120" cy="80" r="25" fill="#FFFFFF" />
+
+            {/* Light rays */}
+            {lightRays}
+
+            {/* Person with arms raised */}
+            <G transform="translate(120, 130)">
+                <Circle cx="0" cy="-15" r="6" fill="white" /> {/* Head */}
+                <Path d="M0,-9 L0,5" stroke="white" strokeWidth="3" /> {/* Body */}
+                <Path d="M0,-5 L-15,-15" stroke="white" strokeWidth="2" /> {/* Left arm up */}
+                <Path d="M0,-5 L15,-15" stroke="white" strokeWidth="2" /> {/* Right arm up */}
+                <Path d="M0,5 L-7,20" stroke="white" strokeWidth="3" /> {/* Left leg */}
+                <Path d="M0,5 L7,20" stroke="white" strokeWidth="3" /> {/* Right leg */}
+            </G>
+
+            {/* Celebration particles */}
+            {particles}
+        </Svg>
+    );
+};
 
 // Define slide content
 const SLIDES = [
