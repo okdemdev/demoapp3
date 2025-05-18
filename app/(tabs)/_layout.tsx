@@ -42,11 +42,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="wins"
+        name="community"
         options={{
-          title: 'Wins',
+          title: 'Community',
           tabBarIcon: ({ color }) => (
-            <FontAwesome name="trophy" size={24} color={color} />
+            <FontAwesome name="users" size={24} color={color} />
           ),
         }}
       />

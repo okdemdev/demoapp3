@@ -26,6 +26,21 @@ export interface Todo {
   completed: boolean;
 }
 
+export interface Post {
+  id: string;
+  author: string;
+  content: string;
+  timestamp: string;
+  comments: Comment[];
+}
+
+export interface Comment {
+  id: string;
+  author: string;
+  content: string;
+  timestamp: string;
+}
+
 // Define all possible data types that can be stored
 export interface GlobalData {
   quiz: {
@@ -47,6 +62,10 @@ export interface GlobalData {
   metrics: Record<MetricKey, number>;
   lastMetricsUpdate?: number; // timestamp of last metrics calculation
   plan?: Plan;
+  community: {
+    friendsPosts: Post[];
+    eventPosts: Post[];
+  };
 }
 
 type MetricKey = 'wisdom' | 'strength' | 'focus' | 'confidence' | 'discipline';
@@ -70,6 +89,8 @@ interface GlobalContextType {
   toggleTodo: (id: string) => Promise<void>;
   uncheckAllTodos: () => Promise<void>;
   updateMetrics: (metrics: Record<MetricKey, number>) => Promise<void>;
+  addPost: (content: string) => Promise<void>;
+  addComment: (postId: string, content: string) => Promise<void>;
 }
 
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
@@ -94,7 +115,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           JSON.stringify(parsedData, null, 2)
         );
 
-        // Ensure metrics exist
+        // Ensure required properties exist
         if (!parsedData.metrics) {
           parsedData.metrics = {
             wisdom: 0,
@@ -102,6 +123,70 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
             focus: 0,
             confidence: 0,
             discipline: 0,
+          };
+        }
+
+        // Ensure community data exists
+        if (!parsedData.community) {
+          parsedData.community = {
+            friendsPosts: [],
+            eventPosts: [
+              {
+                id: '1',
+                author: 'Community Team',
+                content:
+                  '🏃‍♂️ Join our Virtual 5K Challenge! Track your progress and compete with others in our community. Starting next week!',
+                timestamp: '2h ago',
+                comments: [
+                  {
+                    id: '1',
+                    author: 'Sarah',
+                    content:
+                      'Count me in! Been looking for motivation to start running again.',
+                    timestamp: '1h ago',
+                  },
+                  {
+                    id: '2',
+                    author: 'Mike',
+                    content:
+                      'Is there a specific app we should use to track our runs?',
+                    timestamp: '30m ago',
+                  },
+                ],
+              },
+              {
+                id: '2',
+                author: 'Community Team',
+                content:
+                  '🧘‍♀️ Weekly Meditation Session - Join us every Monday at 8 AM EST for a guided meditation session to start your week with clarity and focus.',
+                timestamp: '1d ago',
+                comments: [
+                  {
+                    id: '3',
+                    author: 'Emma',
+                    content:
+                      'These sessions have been life-changing! Highly recommend.',
+                    timestamp: '20h ago',
+                  },
+                ],
+              },
+              {
+                id: '3',
+                author: 'Community Team',
+                content:
+                  '💪 30-Day Habit Building Challenge - Start small, stay consistent. Join us in building one positive habit over the next month.',
+                timestamp: '2d ago',
+                comments: [
+                  {
+                    id: '4',
+                    author: 'Alex',
+                    content:
+                      "Perfect timing! I've been wanting to establish a morning routine.",
+                    timestamp: '1d ago',
+                  },
+                ],
+              },
+            ],
           };
         }
 
@@ -138,7 +223,6 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           },
           subscription: subscriptionData || undefined,
           todos: storedTodos,
-          // Initialize metrics with default values
           metrics: {
             wisdom: 10,
             strength: 10,
@@ -147,6 +231,65 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
             discipline: 10,
           },
           plan: planData || undefined,
+          community: {
+            friendsPosts: [],
+            eventPosts: [
+              {
+                id: '1',
+                author: 'Community Team',
+                content:
+                  '🏃‍♂️ Join our Virtual 5K Challenge! Track your progress and compete with others in our community. Starting next week!',
+                timestamp: '2h ago',
+                comments: [
+                  {
+                    id: '1',
+                    author: 'Sarah',
+                    content:
+                      'Count me in! Been looking for motivation to start running again.',
+                    timestamp: '1h ago',
+                  },
+                  {
+                    id: '2',
+                    author: 'Mike',
+                    content:
+                      'Is there a specific app we should use to track our runs?',
+                    timestamp: '30m ago',
+                  },
+                ],
+              },
+              {
+                id: '2',
+                author: 'Community Team',
+                content:
+                  '🧘‍♀️ Weekly Meditation Session - Join us every Monday at 8 AM EST for a guided meditation session to start your week with clarity and focus.',
+                timestamp: '1d ago',
+                comments: [
+                  {
+                    id: '3',
+                    author: 'Emma',
+                    content:
+                      'These sessions have been life-changing! Highly recommend.',
+                    timestamp: '20h ago',
+                  },
+                ],
+              },
+              {
+                id: '3',
+                author: 'Community Team',
+                content:
+                  '💪 30-Day Habit Building Challenge - Start small, stay consistent. Join us in building one positive habit over the next month.',
+                timestamp: '2d ago',
+                comments: [
+                  {
+                    id: '4',
+                    author: 'Alex',
+                    content: `Perfect timing! I've been wanting to establish a morning routine.`,
+                    timestamp: '1d ago',
+                  },
+                ],
+              },
+            ],
+          },
         };
 
         console.log(
@@ -459,6 +602,53 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const addPost = async (content: string) => {
+    if (!userData) return;
+
+    const newPost: Post = {
+      id: Date.now().toString(),
+      author: 'You',
+      content,
+      timestamp: 'Just now',
+      comments: [],
+    };
+
+    const newData = {
+      ...userData,
+      community: {
+        ...userData.community,
+        friendsPosts: [newPost, ...userData.community.friendsPosts],
+      },
+    };
+
+    await saveUserData(newData);
+  };
+
+  const addComment = async (postId: string, content: string) => {
+    if (!userData) return;
+
+    const newComment: Comment = {
+      id: Date.now().toString(),
+      author: 'You',
+      content,
+      timestamp: 'Just now',
+    };
+
+    const newData = {
+      ...userData,
+      community: {
+        ...userData.community,
+        friendsPosts: userData.community.friendsPosts.map((post) =>
+          post.id === postId
+            ? { ...post, comments: [...post.comments, newComment] }
+            : post
+        ),
+      },
+    };
+
+    await saveUserData(newData);
+  };
+
   return (
     <GlobalContext.Provider
       value={{
@@ -474,6 +664,8 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         toggleTodo,
         uncheckAllTodos,
         updateMetrics,
+        addPost,
+        addComment,
       }}
     >
       {children}

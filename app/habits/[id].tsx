@@ -26,7 +26,7 @@ const HabitIcon = ({ name, selected }: { name: string; selected: boolean }) => {
     'Sit up': 'body-outline',
     'Push up': 'fitness-outline',
     'Drink water': 'water-outline',
-    'Screentime limit': 'phone-portrait-outline',
+    'Screentime': 'phone-portrait-outline',
     'Cold shower': 'snow-outline',
   };
 
@@ -261,7 +261,7 @@ export default function HabitsQuizScreen() {
                 4: 'Sit up',
                 5: 'Push up',
                 6: 'Drink water',
-                7: 'Screentime limit',
+                7: 'Screentime',
                 8: 'Cold shower',
               }[currentQuestion.id] || '';
 
