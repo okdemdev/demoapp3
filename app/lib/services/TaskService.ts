@@ -11,7 +11,13 @@ const taskSchema = z.object({
     metric: z.enum(['wisdom', 'strength', 'focus', 'confidence', 'discipline']),
 });
 
-const tasksResponseSchema = z.array(taskSchema);
+// Accept either an array directly or an object with a tasks property that contains the array
+const tasksResponseSchema = z.union([
+    z.array(taskSchema),
+    z.object({
+        tasks: z.array(taskSchema)
+    })
+]);
 
 // Matches the Task interface from todo.tsx but simplifies for AI generation
 export interface AIGeneratedTask {
@@ -60,6 +66,24 @@ export class TaskService {
     }
 
     /**
+     * Format the OpenAI response to ensure it's valid JSON if possible
+     * This is a utility method to handle potential issues with the response format
+     */
+    private formatOpenAIResponse(response: string): string {
+        // If the response starts with "```json" and ends with "```", extract the JSON content
+        if (response.startsWith('```json') && response.endsWith('```')) {
+            return response.substring(7, response.length - 3).trim();
+        }
+
+        // If the response is wrapped in backticks, remove them
+        if (response.startsWith('```') && response.endsWith('```')) {
+            return response.substring(3, response.length - 3).trim();
+        }
+
+        return response;
+    }
+
+    /**
      * Generates daily tasks based on the user's metrics
      */
     public async generateDailyTasks(
@@ -82,9 +106,11 @@ Response Format Instructions:
   "points": number (5-30, based on difficulty and impact),
   "metric": string (one of: "wisdom", "strength", "focus", "confidence", "discipline")
 }
-3. Ensure all tasks are specific, actionable, and can be completed in a single day
-4. Tasks should vary in difficulty and approach
-5. Focus primarily on the weakest areas while including at least one task for a strength area`;
+3. Format your response as a plain JSON array: [{ task1 }, { task2 }, ...]
+4. Do NOT wrap the array in any outer object
+5. Ensure all tasks are specific, actionable, and can be completed in a single day
+6. Tasks should vary in difficulty and approach
+7. Focus primarily on the weakest areas while including at least one task for a strength area`;
 
             const userPrompt = `
 Create 5 daily tasks for a user on day ${currentDay} of their personal development journey.
@@ -107,16 +133,60 @@ Guidelines for tasks:
 - Make tasks engaging and motivating
 - For each task, include a brief description explaining its benefit
 
-Remember to respond ONLY with the JSON array of tasks matching the specified structure.`.trim();
+Remember to respond ONLY with the JSON array of tasks matching the specified structure.
+Format exactly like this: [{ task1 }, { task2 }, ...] with NO outer wrapper object.`.trim();
 
-            // Generate the tasks
-            const tasks = await this.openai.generateWithZodSchema<AIGeneratedTask[]>(
+            // Try with a direct OpenAI request first
+            try {
+                // For maximum compatibility, we'll make a simple custom request first
+                const rawResponse = await this.openai.generateCustomResponse(
+                    userPrompt,
+                    systemMessage
+                );
+
+                // Format and parse the response
+                const formattedResponse = this.formatOpenAIResponse(rawResponse);
+                console.log('Formatted response sample:', formattedResponse.substring(0, 100) + '...');
+
+                try {
+                    const parsedTasks = JSON.parse(formattedResponse);
+                    if (Array.isArray(parsedTasks) && parsedTasks.length > 0) {
+                        // Check if the first item has the expected structure
+                        const firstTask = parsedTasks[0];
+                        if (firstTask.title && firstTask.description && firstTask.metric) {
+                            console.log('Successfully parsed tasks from custom response');
+                            return parsedTasks;
+                        }
+                    }
+                } catch (parseError) {
+                    console.warn('Failed to parse custom response:', parseError);
+                    // Continue to the schema validation approach
+                }
+            } catch (customError) {
+                console.warn('Custom response approach failed:', customError);
+                // Continue to the schema validation approach
+            }
+
+            // Fall back to schema validation approach
+            console.log('Falling back to schema validation approach');
+            const response = await this.openai.generateWithZodSchema<any>(
                 userPrompt,
                 systemMessage,
                 tasksResponseSchema,
                 3, // maxRetries
                 true // jsonMode
             );
+
+            // Handle the response which could be either an array directly or an object with a tasks property
+            let tasks: AIGeneratedTask[];
+            if (Array.isArray(response)) {
+                tasks = response;
+            } else if (response && response.tasks && Array.isArray(response.tasks)) {
+                tasks = response.tasks;
+            } else {
+                console.error('Unexpected response format:', response);
+                throw new Error('Invalid response format from AI service');
+            }
 
             return tasks;
         } catch (error) {

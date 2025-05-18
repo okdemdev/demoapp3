@@ -93,6 +93,7 @@ class OpenAIService {
             if (typeof content === 'string') {
               try {
                 parsedContent = JSON.parse(content);
+                console.log('Successfully parsed JSON response:', JSON.stringify(parsedContent).substring(0, 100) + '...');
               } catch (e) {
                 console.warn('Failed to parse response as JSON:', content);
                 parsedContent = content;
@@ -101,10 +102,19 @@ class OpenAIService {
               parsedContent = content;
             }
 
-            const parsed = zodSchema.parse(parsedContent);
-            return parsed as T;
+            try {
+              const parsed = zodSchema.parse(parsedContent);
+              return parsed as T;
+            } catch (validationError) {
+              console.warn('Raw response that failed validation:', content);
+              console.warn('Validation error details:', validationError);
+              throw new Error(
+                `Validation failed: ${(validationError as Error).message}`
+              );
+            }
           } catch (validationError) {
             console.warn('Raw response that failed validation:', content);
+            console.warn('Validation error full details:', validationError);
             throw new Error(
               `Validation failed: ${(validationError as Error).message}`
             );
@@ -162,7 +172,7 @@ class OpenAIService {
         ? `${systemMessage}\n\nIMPORTANT: You must respond with a valid JSON object only. Do not include any explanatory text or markdown formatting.`
         : systemMessage;
 
-      return await this.generateWithRetry<T>(
+      const result = await this.generateWithRetry<T>(
         [
           {
             role: 'system',
@@ -179,6 +189,8 @@ class OpenAIService {
           jsonMode,
         }
       );
+
+      return result;
     } catch (error) {
       // Only log the error, don't expose details
       console.debug('Error generating response with schema:', error);
