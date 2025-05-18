@@ -540,7 +540,7 @@ export default function TodoScreen() {
         // Only allow horizontal movement (right swipe reveals options)
         if (gestureState.dx > 0) {
           // Right swipe - limit to maximum width of options
-          pan.setValue({ x: Math.min(gestureState.dx, 120), y: 0 });
+          pan.setValue({ x: Math.min(gestureState.dx, 130), y: 0 });
           if (gestureState.dx > 50 && !showOptions) {
             setShowOptions(true);
           }
@@ -553,7 +553,7 @@ export default function TodoScreen() {
         if (gestureState.dx > 40) {
           // Swiped right enough - show options
           Animated.spring(pan, {
-            toValue: { x: 120, y: 0 },
+            toValue: { x: 130, y: 0 },
             useNativeDriver: true,
             friction: 8,
             tension: 40,
@@ -1563,14 +1563,14 @@ const styles = StyleSheet.create({
   taskOptions: {
     flexDirection: 'column',
     justifyContent: 'center',
-    width: 90,
+    width: 100,
   },
   completeOptionButton: {
     backgroundColor: '#4CAF50', // Green like in statistics/potential-ratings
     padding: 12,
     borderRadius: 10,
     alignItems: 'center',
-    width: 90,
+    width: 105, // Slightly increase width to ensure text fits
     height: 90,
     justifyContent: 'center',
     shadowColor: '#000',
@@ -1587,7 +1587,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     alignItems: 'center',
-    width: 90,
+    width: 105, // Match width with complete button
     height: 90,
     justifyContent: 'center',
     shadowColor: '#000',
@@ -1600,10 +1600,11 @@ const styles = StyleSheet.create({
   },
   optionButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 15, // Slightly larger font
     fontWeight: 'bold',
     marginTop: 6,
     textAlign: 'center',
+    width: '100%', // Ensure text has full width
   },
   optionMetricContainer: {
     flexDirection: 'row',
