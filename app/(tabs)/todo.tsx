@@ -90,8 +90,17 @@ export default function TodoScreen() {
 
       if (hasTodaysTasks) {
         console.log('📝 Found existing tasks for day', currentDay);
-        // Load existing tasks
-        setTasks(userData.dailyTasks!.tasks as Task[]);
+
+        // When loading existing tasks, preserve the local state for tasks that
+        // might have been modified during this session
+        if (tasks.length === 0) {
+          // Only load tasks from userData if we don't have any local tasks yet
+          // (this prevents overwriting completed tasks on re-renders)
+          setTasks(userData.dailyTasks!.tasks as Task[]);
+        } else {
+          // We already have tasks, so let's keep our local state
+          console.log('🔒 Preserving existing local task state');
+        }
 
         // Set before/after stats
         if (userData.metrics) {
@@ -132,6 +141,8 @@ export default function TodoScreen() {
     if (userData?.metrics) {
       console.log('📊 Metrics updated, updating afterStats');
       setAfterStats({ ...userData.metrics });
+
+      // Don't update tasks here, as that would overwrite completion state
     }
   }, [userData?.metrics]);
 
@@ -386,59 +397,50 @@ export default function TodoScreen() {
     const taskToComplete = tasks[taskIndex];
     console.log('📋 Task to complete:', taskToComplete);
 
-    // Create a completely new array (to ensure React detects the change)
+    // Immediately update local state for quicker feedback
     const newTasks = tasks.map((task) =>
       task.id === taskId
         ? { ...task, completed: true, skipped: false }
         : { ...task }
     );
 
-    // Set the new tasks array
-    console.log('📊 Setting new tasks array');
-    console.log(
-      'Before update:',
-      tasks.map((t) => `${t.title}: ${t.completed ? 'completed' : 'pending'}`)
-    );
-    console.log(
-      'After update:',
-      newTasks.map(
-        (t) => `${t.title}: ${t.completed ? 'completed' : 'pending'}`
-      )
-    );
-
-    // Update the local state
+    // Update the local state right away
     setTasks(newTasks);
 
     // Update the task in global context
     updateDailyTask(taskId, { completed: true, skipped: false });
 
-    // Update the metrics if they exist
-    if (userData?.metrics) {
-      console.log('📈 Current metrics:', userData.metrics);
-      console.log(
-        `📊 Adding ${taskToComplete.points} points to ${taskToComplete.metric}`
-      );
+    // Start a slight delay to allow any animations to complete
+    setTimeout(() => {
+      // Update the metrics if they exist
+      if (userData?.metrics) {
+        console.log('📈 Current metrics:', userData.metrics);
+        console.log(
+          `📊 Adding ${taskToComplete.points} points to ${taskToComplete.metric}`
+        );
 
-      // Update the after stats for UI display
-      const newAfterStats = { ...afterStats };
-      newAfterStats[taskToComplete.metric] += taskToComplete.points;
-      setAfterStats(newAfterStats);
+        // Update the after stats for UI display
+        const newAfterStats = { ...afterStats };
+        newAfterStats[taskToComplete.metric] += taskToComplete.points;
+        setAfterStats(newAfterStats);
 
-      // Update global metrics
-      const updatedMetrics = { ...userData.metrics };
-      updatedMetrics[taskToComplete.metric] += taskToComplete.points;
+        // Update global metrics
+        const updatedMetrics = { ...userData.metrics };
+        updatedMetrics[taskToComplete.metric] += taskToComplete.points;
 
-      console.log('📊 New metrics will be:', updatedMetrics);
-      updateMetrics(updatedMetrics);
-    } else {
-      console.error('❌ No metrics found in userData');
-    }
+        console.log('📊 New metrics will be:', updatedMetrics);
+        updateMetrics(updatedMetrics);
+      } else {
+        console.error('❌ No metrics found in userData');
+      }
+    }, 300); // Short delay to allow animation to complete
   };
 
   // Skip a task
   const skipTask = (taskId: string) => {
     console.log('Skipping task:', taskId);
 
+    // Immediately update local state for better visual feedback
     const updatedTasks = tasks.map((task) => {
       if (task.id === taskId) {
         return { ...task, completed: false, skipped: true };
@@ -446,7 +448,7 @@ export default function TodoScreen() {
       return task;
     });
 
-    // Update local state
+    // Update local state immediately
     setTasks(updatedTasks);
 
     // Update in global context
@@ -528,42 +530,140 @@ export default function TodoScreen() {
 
     // For pending tasks, show the normal card with pan responder
     const pan = useState(new Animated.ValueXY())[0];
+    const [showOptions, setShowOptions] = useState(false);
+    const [completePressed, setCompletePressed] = useState(false);
+    const [skipPressed, setSkipPressed] = useState(false);
 
     const panResponder = PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderMove: (evt, gestureState) => {
-        // Only allow horizontal movement
-        pan.setValue({ x: gestureState.dx, y: 0 });
+        // Only allow horizontal movement (right swipe reveals options)
+        if (gestureState.dx > 0) {
+          // Right swipe - limit to maximum width of options
+          pan.setValue({ x: Math.min(gestureState.dx, 120), y: 0 });
+          if (gestureState.dx > 50 && !showOptions) {
+            setShowOptions(true);
+          }
+        } else {
+          // Left swipe - not allowing
+          pan.setValue({ x: Math.max(gestureState.dx, 0), y: 0 });
+        }
       },
       onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dx > 120) {
-          // Swiped right - Complete
-          completeTask(task.id);
+        if (gestureState.dx > 40) {
+          // Swiped right enough - show options
           Animated.spring(pan, {
-            toValue: { x: 400, y: 0 },
+            toValue: { x: 120, y: 0 },
             useNativeDriver: true,
+            friction: 8,
+            tension: 40,
           }).start();
-        } else if (gestureState.dx < -120) {
-          // Swiped left - Skip
-          skipTask(task.id);
-          Animated.spring(pan, {
-            toValue: { x: -400, y: 0 },
-            useNativeDriver: true,
-          }).start();
+          setShowOptions(true);
         } else {
           // Return to center
           Animated.spring(pan, {
             toValue: { x: 0, y: 0 },
             useNativeDriver: true,
+            friction: 8,
+            tension: 40,
           }).start();
+          setShowOptions(false);
         }
       },
     });
 
+    // Get the appropriate icon for the metric
+    const metricIcon = getIoniconsForMetric(task.metric);
+
     return (
       <View style={styles.taskCardContainer}>
+        {/* Options Container (positioned behind the card) */}
+        <View style={styles.taskOptionsContainer}>
+          <View style={styles.taskOptions}>
+            <TouchableOpacity
+              style={[
+                styles.completeOptionButton,
+                completePressed && { backgroundColor: '#388E3C' }
+              ]}
+              activeOpacity={0.7}
+              onPress={() => {
+                console.log('✅ Complete option button pressed for task:', task.id);
+
+                // Visual feedback with state
+                setCompletePressed(true);
+
+                // Call complete task
+                completeTask(task.id);
+
+                // Reset animation and hide options
+                Animated.spring(pan, {
+                  toValue: { x: 0, y: 0 },
+                  useNativeDriver: true,
+                  friction: 8,
+                  tension: 40,
+                }).start();
+                setShowOptions(false);
+
+                // Reset pressed state after delay
+                setTimeout(() => {
+                  setCompletePressed(false);
+                }, 300);
+              }}
+            >
+              <Ionicons name="checkmark-circle" size={28} color="#fff" />
+              <Text style={styles.optionButtonText}>Complete</Text>
+              <View style={styles.optionMetricContainer}>
+                <Ionicons name={metricIcon} size={16} color="#fff" />
+                <Text style={styles.optionMetricText}>+{task.points}</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.skipOptionButton,
+                skipPressed && { backgroundColor: '#424242' }
+              ]}
+              activeOpacity={0.7}
+              onPress={() => {
+                console.log('🔴 Skip option button pressed for task:', task.id);
+
+                // Visual feedback with state
+                setSkipPressed(true);
+
+                // Call skip task
+                skipTask(task.id);
+
+                // Reset animation and hide options
+                Animated.spring(pan, {
+                  toValue: { x: 0, y: 0 },
+                  useNativeDriver: true,
+                  friction: 8,
+                  tension: 40,
+                }).start();
+                setShowOptions(false);
+
+                // Reset pressed state after delay
+                setTimeout(() => {
+                  setSkipPressed(false);
+                }, 300);
+              }}
+            >
+              <Ionicons name="close-circle" size={28} color="#fff" />
+              <Text style={styles.optionButtonText}>Skip</Text>
+              <View style={styles.optionMetricContainer}>
+                <Ionicons name={metricIcon} size={16} color="#fff" />
+                <Text style={styles.optionMetricText}>+0</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Task Card (slides to reveal options) */}
         <Animated.View
-          style={[styles.taskCard, { transform: [{ translateX: pan.x }] }]}
+          style={[
+            styles.taskCard,
+            { transform: [{ translateX: pan.x }] }
+          ]}
           {...panResponder.panHandlers}
         >
           <View style={styles.taskImageContainer}>
@@ -599,33 +699,8 @@ export default function TodoScreen() {
             </View>
 
             <View style={styles.swipeHint}>
-              <FontAwesome name="hand-o-left" size={16} color="#fff" />
-              <Text style={styles.swipeText}>Swipe to complete or skip</Text>
-            </View>
-
-            {/* Direct action buttons */}
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={styles.skipButton}
-                onPress={() => {
-                  console.log('🔴 Skip button pressed for task:', task.id);
-                  skipTask(task.id);
-                }}
-              >
-                <FontAwesome name="times" size={20} color="#fff" />
-                <Text style={styles.buttonText}>Skip</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.completeButton}
-                onPress={() => {
-                  console.log('✅ Complete button pressed for task:', task.id);
-                  completeTask(task.id);
-                }}
-              >
-                <FontAwesome name="check" size={20} color="#fff" />
-                <Text style={styles.buttonText}>Complete</Text>
-              </TouchableOpacity>
+              <Ionicons name="chevron-forward" size={20} color="#F37335" />
+              <Text style={styles.swipeText}>Swipe right for options</Text>
             </View>
           </View>
         </Animated.View>
@@ -653,10 +728,10 @@ export default function TodoScreen() {
     }
   };
 
-  // Helper to get Ionicons name for metric (in Modal)
+  // Helper to get Ionicons name for metric
   const getIoniconsForMetric = (metric: MetricKey): any => {
     const icons: Record<MetricKey, string> = {
-      wisdom: 'brain',
+      wisdom: 'book-outline',
       strength: 'barbell-outline',
       focus: 'eye-outline',
       confidence: 'sunny-outline',
@@ -978,6 +1053,7 @@ const styles = StyleSheet.create({
   },
   taskCardContainer: {
     marginBottom: 20,
+    position: 'relative',
   },
   taskCard: {
     backgroundColor: '#e89c3e', // Orange color from the design
@@ -988,6 +1064,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 5,
     elevation: 6,
+    zIndex: 1,
   },
   taskImageContainer: {
     padding: 16,
@@ -1047,11 +1124,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 16,
     marginBottom: 8,
+    backgroundColor: 'rgba(243, 115, 53, 0.2)', // F37335 with opacity
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(243, 115, 53, 0.5)',
   },
   swipeText: {
     marginLeft: 8,
-    color: '#fff',
+    color: '#F37335',
     fontSize: 14,
+    fontWeight: 'bold',
   },
   actionButtons: {
     flexDirection: 'row',
@@ -1463,5 +1548,76 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginTop: 16,
+  },
+  taskOptionsContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: '100%',
+    paddingLeft: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 0,
+  },
+  taskOptions: {
+    flexDirection: 'column',
+    justifyContent: 'center',
+    width: 90,
+  },
+  completeOptionButton: {
+    backgroundColor: '#4CAF50', // Green like in statistics/potential-ratings
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    width: 90,
+    height: 90,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  skipOptionButton: {
+    backgroundColor: '#616161', // Grey for skip
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    width: 90,
+    height: 90,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  optionButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  optionMetricContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 15,
+    marginTop: 6,
+  },
+  optionMetricText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginLeft: 4,
   },
 });
