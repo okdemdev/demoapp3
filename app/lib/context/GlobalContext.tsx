@@ -62,13 +62,32 @@ export interface GlobalData {
   metrics: Record<MetricKey, number>;
   lastMetricsUpdate?: number; // timestamp of last metrics calculation
   plan?: Plan;
+  dailyTasks?: {
+    tasks: DailyTask[];
+    generatedForDay: number;
+    generatedAt: string; // ISO date string
+  };
   community: {
     friendsPosts: Post[];
     eventPosts: Post[];
   };
 }
 
-type MetricKey = 'wisdom' | 'strength' | 'focus' | 'confidence' | 'discipline';
+export type MetricKey = 'wisdom' | 'strength' | 'focus' | 'confidence' | 'discipline';
+
+// Interface for daily tasks
+export interface DailyTask {
+  id: string;
+  title: string;
+  description: string;
+  metric: MetricKey;
+  points: number;
+  streak: number;
+  repeat: 'Daily' | 'Weekly' | 'Monthly' | 'Custom';
+  difficulty: number; // 1-5
+  completed: boolean;
+  skipped: boolean;
+}
 
 interface GlobalContextType {
   userData: GlobalData | null;
@@ -91,6 +110,8 @@ interface GlobalContextType {
   updateMetrics: (metrics: Record<MetricKey, number>) => Promise<void>;
   addPost: (content: string) => Promise<void>;
   addComment: (postId: string, content: string) => Promise<void>;
+  saveDailyTasks: (tasks: DailyTask[], dayNumber: number) => Promise<void>;
+  updateDailyTask: (taskId: string, updates: Partial<DailyTask>) => Promise<void>;
 }
 
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
@@ -851,6 +872,48 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     await saveUserData(newData);
   };
 
+  const saveDailyTasks = async (tasks: DailyTask[], dayNumber: number) => {
+    if (!userData) return;
+
+    console.log('💾 Saving daily tasks for day', dayNumber);
+
+    const newData = {
+      ...userData,
+      dailyTasks: {
+        tasks,
+        generatedForDay: dayNumber,
+        generatedAt: new Date().toISOString(),
+      },
+    };
+
+    await saveUserData(newData);
+    console.log('✅ Successfully saved daily tasks');
+  };
+
+  const updateDailyTask = async (taskId: string, updates: Partial<DailyTask>) => {
+    if (!userData?.dailyTasks?.tasks) {
+      console.error('❌ No daily tasks found to update');
+      return;
+    }
+
+    console.log('🔄 Updating task:', taskId, updates);
+
+    const updatedTasks = userData.dailyTasks.tasks.map((task) =>
+      task.id === taskId ? { ...task, ...updates } : task
+    );
+
+    const newData = {
+      ...userData,
+      dailyTasks: {
+        ...userData.dailyTasks,
+        tasks: updatedTasks,
+      },
+    };
+
+    await saveUserData(newData);
+    console.log('✅ Successfully updated task');
+  };
+
   return (
     <GlobalContext.Provider
       value={{
@@ -868,6 +931,8 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         updateMetrics,
         addPost,
         addComment,
+        saveDailyTasks,
+        updateDailyTask,
       }}
     >
       {children}
