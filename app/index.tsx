@@ -82,7 +82,7 @@ export default function WelcomeScreen() {
 
   // Typing effect state
   const phrases = [
-    'Welcome to I.R.I.S.E.',
+    'Welcome to 2do.',
     'Ready to transform your life?',
     'We\'ve created your personal invitation to change.',
   ];
