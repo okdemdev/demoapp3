@@ -66,6 +66,12 @@ export interface GlobalData {
     friendsPosts: Post[];
     eventPosts: Post[];
   };
+  videoGeneration?: {
+    status: 'idle' | 'generating' | 'completed' | 'error';
+    videoPath?: string;
+    error?: string;
+    lastUpdated?: number;
+  };
 }
 
 type MetricKey = 'wisdom' | 'strength' | 'focus' | 'confidence' | 'discipline';
@@ -91,6 +97,9 @@ interface GlobalContextType {
   updateMetrics: (metrics: Record<MetricKey, number>) => Promise<void>;
   addPost: (content: string) => Promise<void>;
   addComment: (postId: string, content: string) => Promise<void>;
+  updateVideoGenerationStatus: (
+    status: NonNullable<GlobalData['videoGeneration']>
+  ) => Promise<void>;
 }
 
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
@@ -851,6 +860,22 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     await saveUserData(newData);
   };
 
+  const updateVideoGenerationStatus = async (
+    status: NonNullable<GlobalData['videoGeneration']>
+  ) => {
+    if (!userData) return;
+
+    const newData = {
+      ...userData,
+      videoGeneration: {
+        ...status,
+        lastUpdated: Date.now(),
+      },
+    };
+
+    await saveUserData(newData);
+  };
+
   return (
     <GlobalContext.Provider
       value={{
@@ -868,6 +893,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         updateMetrics,
         addPost,
         addComment,
+        updateVideoGenerationStatus,
       }}
     >
       {children}
