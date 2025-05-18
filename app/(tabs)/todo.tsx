@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -68,6 +69,12 @@ export default function TodoScreen() {
   // Define refs at the top level of the component
   const isInitialRender = useRef(true);
   const currentDayChanged = useRef(false);
+
+  // Add this for congratulation modal
+  const [showCongratulationModal, setShowCongratulationModal] = useState(false);
+  const [journalEntry, setJournalEntry] = useState('');
+  const [completedTaskData, setCompletedTaskData] = useState<Task | null>(null);
+  const congratulationAnimation = useRef(new Animated.Value(-1000)).current;
 
   // Load current day from AsyncStorage
   useEffect(() => {
@@ -184,6 +191,27 @@ export default function TodoScreen() {
       }).start();
     }
   }, [showStatsModal]);
+
+  // Add animation for congratulation modal
+  useEffect(() => {
+    if (showCongratulationModal) {
+      Animated.spring(congratulationAnimation, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 20,
+        friction: 7,
+      }).start();
+
+      // Reset journal entry when modal opens
+      setJournalEntry('');
+    } else {
+      Animated.timing(congratulationAnimation, {
+        toValue: -1000,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showCongratulationModal]);
 
   // Load current day information
   const loadDayInfo = async () => {
@@ -420,6 +448,9 @@ export default function TodoScreen() {
     const taskToComplete = tasks[taskIndex];
     console.log('📋 Task to complete:', taskToComplete);
 
+    // Save task data for congratulation screen
+    setCompletedTaskData(taskToComplete);
+
     // Immediately update local state for quicker feedback
     const newTasks = tasks.map((task) =>
       task.id === taskId
@@ -459,6 +490,9 @@ export default function TodoScreen() {
 
         console.log('📊 New metrics will be:', updatedMetrics);
         updateMetrics(updatedMetrics);
+
+        // Show congratulation modal
+        setShowCongratulationModal(true);
       } else {
         console.error('❌ No metrics found in userData');
       }
@@ -920,6 +954,134 @@ export default function TodoScreen() {
     );
   };
 
+  // Get the appropriate icon for the metric
+  const getMetricIcon = (metric: MetricKey): string => {
+    const icons: Record<MetricKey, string> = {
+      wisdom: 'brain',
+      strength: 'barbell-outline',
+      focus: 'eye-outline',
+      confidence: 'sunny-outline',
+      discipline: 'lock-closed-outline',
+    };
+    return icons[metric];
+  };
+
+  // Calculate improvement for the completed task's metric
+  const getMetricImprovement = (metric: MetricKey, points: number): number => {
+    if (!userData?.metrics) return 0;
+    const before = beforeStats[metric] || 0;
+    const after = beforeStats[metric] + points;
+    return after - before;
+  };
+
+  // Save journal entry
+  const saveJournalEntry = () => {
+    if (journalEntry.trim() && completedTaskData) {
+      console.log('Saving journal entry:', journalEntry);
+      // Here you could add code to save the journal entry to your data storage
+      // For now, we'll just close the modal
+      setShowCongratulationModal(false);
+    } else {
+      // If no journal entry, just close the modal
+      setShowCongratulationModal(false);
+    }
+  };
+
+  // Render the congratulation modal
+  const renderCongratulationModal = () => {
+    if (!completedTaskData) return null;
+
+    const metricKey = completedTaskData.metric;
+    const metricIcon = getMetricIcon(metricKey);
+    const points = completedTaskData.points;
+    const improvement = getMetricImprovement(metricKey, points);
+    const metricName = metricKey.charAt(0).toUpperCase() + metricKey.slice(1);
+
+    return (
+      <Modal
+        transparent={true}
+        visible={showCongratulationModal}
+        animationType="none"
+        onRequestClose={() => setShowCongratulationModal(false)}
+      >
+        <View style={styles.congratsModalOverlay}>
+          <Animated.View
+            style={[
+              styles.congratsModalContainer,
+              { transform: [{ translateY: congratulationAnimation }] },
+            ]}
+          >
+            <ScrollView
+              style={styles.congratsModalScroll}
+              contentContainerStyle={styles.congratsModalScrollContent}
+            >
+              <View style={styles.congratsHeader}>
+                <Text style={styles.congratsTitle}>Well done!</Text>
+                <Text style={styles.congratsSubtitle}>
+                  You've completed today's task
+                </Text>
+              </View>
+
+              <View style={styles.congratsMetricCard}>
+                <View style={styles.congratsScoreHeader}>
+                  <Ionicons
+                    name={metricIcon as any}
+                    size={28}
+                    color="#fff"
+                  />
+                  <Text style={styles.congratsScoreLabel}>{metricName}</Text>
+                </View>
+                <View style={styles.congratsScoreValueContainer}>
+                  <Text style={styles.congratsScoreValue}>
+                    +{points}
+                  </Text>
+                  <Text style={styles.congratsImprovement}>
+                    Your {metricName} is now {afterStats[metricKey]}
+                  </Text>
+                </View>
+                <View style={styles.congratsScoreBarContainer}>
+                  <View
+                    style={[
+                      styles.congratsScoreBar,
+                      { width: `${Math.min(100, afterStats[metricKey])}%` },
+                    ]}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.journalPrompt}>How are you feeling today?</Text>
+
+              <TextInput
+                style={styles.journalInput}
+                placeholder="Share your thoughts..."
+                placeholderTextColor="#fff8"
+                multiline={true}
+                value={journalEntry}
+                onChangeText={setJournalEntry}
+              />
+
+              <View style={styles.congratsButtonsContainer}>
+                <TouchableOpacity
+                  style={styles.skipJournalButton}
+                  onPress={() => setShowCongratulationModal(false)}
+                >
+                  <Text style={styles.skipJournalButtonText}>Skip</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.saveJournalButton}
+                  onPress={saveJournalEntry}
+                >
+                  <Text style={styles.saveJournalButtonText}>Save Journal</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </Animated.View>
+        </View>
+      </Modal>
+    );
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
@@ -1013,8 +1175,9 @@ export default function TodoScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Render the modal */}
+      {/* Render both modals */}
       {renderStatsModal()}
+      {renderCongratulationModal()}
     </View>
   );
 }
@@ -1649,5 +1812,135 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     marginLeft: 4,
+  },
+  congratsModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-start',
+  },
+  congratsModalContainer: {
+    backgroundColor: '#4CAF50', // Bright green background
+    height: '100%',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  congratsModalScroll: {
+    flex: 1,
+  },
+  congratsModalScrollContent: {
+    paddingBottom: 50,
+  },
+  congratsHeader: {
+    alignItems: 'center',
+    marginTop: 40,
+    marginBottom: 30,
+  },
+  congratsTitle: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 10,
+  },
+  congratsSubtitle: {
+    fontSize: 20,
+    color: '#fff',
+    textAlign: 'center',
+  },
+  congratsMetricCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
+    padding: 20,
+    marginVertical: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  congratsScoreHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  congratsScoreLabel: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginLeft: 10,
+  },
+  congratsScoreValueContainer: {
+    flexDirection: 'column',
+    marginBottom: 12,
+  },
+  congratsScoreValue: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  congratsImprovement: {
+    fontSize: 16,
+    color: '#fff',
+    marginTop: 5,
+  },
+  congratsScoreBarContainer: {
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  congratsScoreBar: {
+    height: '100%',
+    backgroundColor: '#fff',
+  },
+  journalPrompt: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 20,
+    marginBottom: 15,
+  },
+  journalInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 12,
+    padding: 16,
+    color: '#fff',
+    fontSize: 16,
+    minHeight: 150,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  congratsButtonsContainer: {
+    flexDirection: 'row',
+    marginTop: 20,
+    justifyContent: 'space-between',
+  },
+  skipJournalButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 10,
+    width: '45%',
+  },
+  skipJournalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  saveJournalButton: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 10,
+    width: '45%',
+  },
+  saveJournalButtonText: {
+    color: '#4CAF50',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });
