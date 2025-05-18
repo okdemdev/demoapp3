@@ -82,7 +82,7 @@ export default function WelcomeScreen() {
 
   // Typing effect state
   const phrases = [
-    'Welcome to 2do.',
+    'Welcome to Peak',
     'Ready to transform your life?',
     'We\'ve created your personal invitation to change.',
   ];
@@ -351,25 +351,28 @@ export default function WelcomeScreen() {
             </LinearGradient>
           </Animated.View>
         )}
+      </Animated.View>
 
-        {/* Continue Button - show when typing is complete */}
-        {typingComplete && (
-          <React.Fragment>
-            <Pressable style={styles.button} onPress={handleContinue}>
-              <Text style={styles.buttonText}>
-                {currentScreen < 2 ? 'Continue' : 'Start Now'}
-              </Text>
-            </Pressable>
+      {/* Fixed position buttons container */}
+      <Animated.View style={[styles.buttonsContainer, { opacity: typingComplete ? 1 : 0 }]}>
+        <Pressable
+          style={styles.button}
+          onPress={handleContinue}
+          disabled={!typingComplete}
+        >
+          <Text style={styles.buttonText}>
+            {currentScreen < 2 ? 'Continue' : 'Start Now'}
+          </Text>
+        </Pressable>
 
-            {currentScreen === 0 && (
-              <Pressable
-                style={[styles.button, styles.resultsButton]}
-                onPress={() => router.push('/results')}
-              >
-                <Text style={styles.buttonText}>View Results</Text>
-              </Pressable>
-            )}
-          </React.Fragment>
+        {currentScreen === 0 && (
+          <Pressable
+            style={[styles.button, styles.resultsButton]}
+            onPress={() => router.push('/results')}
+            disabled={!typingComplete}
+          >
+            <Text style={styles.buttonText}>View Results</Text>
+          </Pressable>
         )}
       </Animated.View>
     </View>
@@ -405,7 +408,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingBottom: 50,
+    paddingBottom: 140, // Add padding to make room for buttons
   },
   logoContainer: {
     marginBottom: 20,
@@ -515,6 +518,15 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.7)',
     marginTop: 4,
   },
+  buttonsContainer: {
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
   button: {
     backgroundColor: '#ff7300',
     paddingHorizontal: 40,
@@ -526,6 +538,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     marginTop: 20,
+    width: '100%',
+    alignItems: 'center',
+    maxWidth: 360,
   },
   resultsButton: {
     backgroundColor: '#90f',
