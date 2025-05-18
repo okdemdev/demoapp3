@@ -95,7 +95,7 @@ class OpenAIService {
                 parsedContent = JSON.parse(content);
                 console.log('Successfully parsed JSON response:', JSON.stringify(parsedContent).substring(0, 100) + '...');
               } catch (e) {
-                console.warn('Failed to parse response as JSON:', content);
+                console.log('Content is not valid JSON, using as raw value:', content);
                 parsedContent = content;
               }
             } else {
@@ -103,10 +103,12 @@ class OpenAIService {
             }
 
             try {
+              // Use the schema to validate and transform the data
               const parsed = zodSchema.parse(parsedContent);
+              console.log('Validation successful, returning:', parsed);
               return parsed as T;
             } catch (validationError) {
-              console.warn('Raw response that failed validation:', content);
+              console.warn('Raw response that failed validation:', JSON.stringify(parsedContent));
               console.warn('Validation error details:', validationError);
               throw new Error(
                 `Validation failed: ${(validationError as Error).message}`
@@ -167,10 +169,19 @@ class OpenAIService {
     jsonMode: boolean = true
   ): Promise<T> {
     try {
-      // If JSON mode is enabled, append JSON format instructions
-      const enhancedSystemMessage = jsonMode
-        ? `${systemMessage}\n\nIMPORTANT: You must respond with a valid JSON object only. Do not include any explanatory text or markdown formatting.`
-        : systemMessage;
+      // If we're validating with a number schema and not in JSON mode, adjust instructions
+      const isNumberSchema = zodSchema.safeParse(123).success && !zodSchema.safeParse('abc').success;
+
+      // Add clear format instructions based on the expected response type
+      let enhancedSystemMessage = systemMessage;
+
+      if (jsonMode) {
+        // For JSON responses
+        enhancedSystemMessage = `${systemMessage}\n\nIMPORTANT: You must respond with a valid JSON object only. Do not include any explanatory text or markdown formatting.`;
+      } else if (isNumberSchema) {
+        // For direct number responses
+        enhancedSystemMessage = `${systemMessage}\n\nIMPORTANT: You must respond with only a single number. No additional text, no formatting, no JSON.`;
+      }
 
       const result = await this.generateWithRetry<T>(
         [

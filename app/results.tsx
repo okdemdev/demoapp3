@@ -48,11 +48,19 @@ const METRIC_DESCRIPTIONS: Record<MetricKey, string> = {
 };
 
 // Schema for validating the score response
-const scoreSchema = z.preprocess((val) => {
-  // Try to parse the value as a number
-  const parsed = Number(String(val));
-  return isNaN(parsed) ? null : parsed;
-}, z.number().min(0).max(100).int()) as z.ZodType<number>;
+const scoreSchema = z.preprocess(
+  (val) => {
+    // Check if the value is an object with a score property
+    if (val && typeof val === 'object' && 'score' in val) {
+      return (val as { score: number }).score;
+    }
+
+    // Otherwise, try to parse the value as a number
+    const parsed = Number(String(val));
+    return isNaN(parsed) ? null : parsed;
+  },
+  z.number().min(0).max(100).int()
+) as z.ZodType<number>;
 
 // Build context string with both quiz and habits answers
 function buildContextString(
@@ -114,15 +122,17 @@ ${scoringCriteria}
 QUESTIONS AND ANSWERS:
 ${context}
 
-RESPONSE FORMAT: Single integer between 0-100 only.
+RESPONSE FORMAT: Return a JSON object with a single "score" field containing an integer between 0-100.
+Example: {"score": 75}
 `.trim();
 
   try {
     const score = await openai.generateWithZodSchema<number>(
       prompt,
-      'You are a scoring algorithm that outputs only a single integer between 0 and 100.',
+      'You are a scoring algorithm that outputs only a score as a JSON object with a "score" field containing an integer between 0 and 100.',
       scoreSchema,
-      5 // Use 5 retries with exponential backoff
+      5, // Use 5 retries with exponential backoff
+      true // Use JSON mode
     );
 
     return Math.min(100, Math.max(0, Math.round(score)));
@@ -613,7 +623,7 @@ export default function ResultsScreen() {
     // Calculate overall score as average of all metrics
     const overallScore = Math.round(
       Object.values(metrics).reduce((sum, value) => sum + value, 0) /
-        Object.keys(metrics).length
+      Object.keys(metrics).length
     );
 
     return (
