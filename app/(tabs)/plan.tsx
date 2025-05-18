@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ResizeMode, Video } from 'expo-av';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -172,7 +172,7 @@ export default function PlanScreen() {
         <Text style={styles.subtitle}>
           Creating a personalized improvement plan based on your data...
         </Text>
-        <ActivityIndicator size="large" color="#ffffff" style={styles.loader} />
+        <ActivityIndicator size="large" color="#000000" style={styles.loader} />
       </View>
     );
   }
@@ -180,7 +180,7 @@ export default function PlanScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Your Plan</Text>
+        <Text style={styles.title}>How will I improve</Text>
         <View style={styles.headerButtons}>
           <TouchableOpacity
             style={[
@@ -193,19 +193,27 @@ export default function PlanScreen() {
             <Ionicons
               name={isGeneratingVideo ? 'stop-circle' : 'play'}
               size={24}
-              color="#ffffff"
+              color="#000000"
             />
           </TouchableOpacity>
           <TouchableOpacity style={styles.refreshButton} onPress={generatePlan}>
-            <Ionicons name="refresh" size={24} color="#ffffff" />
+            <Ionicons name="refresh" size={24} color="#000000" />
           </TouchableOpacity>
         </View>
+      </View>
+
+      <View style={styles.description}>
+        <Text style={styles.descriptionText}>
+          <Text style={styles.descriptionHighlight}>The Goose life reset program is </Text>
+          <Text style={styles.descriptionBold}>designed scientifically from research studies </Text>
+          <Text style={styles.descriptionHighlight}>to maximize your chance of success.</Text>
+        </Text>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {isGeneratingVideo && (
           <View style={styles.videoStatusContainer}>
-            <ActivityIndicator size="small" color="#ffffff" />
+            <ActivityIndicator size="small" color="#000000" />
             <Text style={styles.videoStatusText}>
               Generating presentation...
             </Text>
@@ -266,20 +274,27 @@ export default function PlanScreen() {
           userData.plan?.weeks.map((week) => (
             <View key={week.weekNumber} style={styles.weekContainer}>
               <View style={styles.weekHeader}>
-                <Text style={styles.weekTitle}>Week {week.weekNumber}</Text>
-                <Text style={styles.weekDates}>
-                  {new Date(week.startDate).toLocaleDateString()} -{' '}
-                  {new Date(week.endDate).toLocaleDateString()}
+                <Text style={styles.weekTitle}>
+                  Week {week.weekNumber} ({new Date(week.startDate).getDate()} {new Date(week.startDate).toLocaleString('default', { month: 'short' })} to {new Date(week.endDate).getDate()} {new Date(week.endDate).toLocaleString('default', { month: 'short' })})
                 </Text>
               </View>
               {week.improvements.map((improvement, index) => (
                 <View key={index} style={styles.improvementItem}>
-                  {improvement.icon && (
+                  {improvement.icon ? (
                     <Text style={styles.improvementIcon}>
                       {improvement.icon}
                     </Text>
+                  ) : (
+                    <Ionicons
+                      name={index === 0 ? "cube-outline" : index === 1 ? "sunny-outline" : "heart-outline"}
+                      size={24}
+                      color="#000"
+                      style={styles.improvementIconFallback}
+                    />
                   )}
-                  <Text style={styles.improvementText}>{improvement.text}</Text>
+                  <Text style={styles.improvementText}>
+                    {renderHighlightedText(improvement.text)}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -287,6 +302,38 @@ export default function PlanScreen() {
       </ScrollView>
     </View>
   );
+}
+
+// Helper function to highlight certain parts of the text
+function renderHighlightedText(text: string) {
+  // This is a simplified function - in a real app you'd want to have a more sophisticated approach
+  // to determine which parts to highlight based on data from the backend
+
+  if (!text) return null;
+
+  // Split by keywords that should be highlighted
+  const keywordsToHighlight = [
+    'basic, easy habits',
+    'as the first week finishes',
+    'boosted metabolism',
+    'Improved clarity'
+  ];
+
+  // Check if text contains any of the keywords
+  const foundKeyword = keywordsToHighlight.find(keyword => text.includes(keyword));
+
+  if (foundKeyword) {
+    const parts = text.split(foundKeyword);
+    return (
+      <>
+        <Text>{parts[0]}</Text>
+        <Text style={{ color: '#FF7D49' }}>{foundKeyword}</Text>
+        <Text>{parts[1]}</Text>
+      </>
+    );
+  }
+
+  return <Text>{text}</Text>;
 }
 
 const styles = StyleSheet.create({
@@ -316,6 +363,20 @@ const styles = StyleSheet.create({
     color: '#888888',
     marginBottom: 20,
   },
+  description: {
+    marginBottom: 20,
+  },
+  descriptionText: {
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  descriptionHighlight: {
+    color: '#888888',
+  },
+  descriptionBold: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
   content: {
     flex: 1,
   },
@@ -324,6 +385,11 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 20,
     marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   weekHeader: {
     marginBottom: 15,
@@ -349,6 +415,10 @@ const styles = StyleSheet.create({
   improvementIcon: {
     fontSize: 24,
     marginRight: 15,
+  },
+  improvementIconFallback: {
+    marginRight: 15,
+    color: '#ffffff',
   },
   improvementText: {
     flex: 1,
