@@ -588,6 +588,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
 
   const clearUserData = async () => {
     try {
+      // Clear all AsyncStorage data
       await Promise.all([
         clearSubscription(),
         clearTodos(),
@@ -597,7 +598,134 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         AsyncStorage.removeItem('userData'),
         AsyncStorage.removeItem('dayTracker'),
       ]);
-      setUserData(null);
+
+      // Reset to default state
+      const defaultUserData: GlobalData = {
+        quiz: {
+          answers: [],
+          completed: false,
+          insights: {},
+        },
+        habits: {
+          answers: [],
+          completed: false,
+        },
+        subscription: undefined,
+        todos: [],
+        metrics: {
+          wisdom: 10,
+          strength: 10,
+          focus: 10,
+          confidence: 10,
+          discipline: 10,
+        },
+        plan: undefined,
+        community: {
+          friendsPosts: [
+            {
+              id: '1',
+              author: 'John',
+              content:
+                '🎯 Just completed my first week of daily meditation! Feeling more focused and calm already.',
+              timestamp: '3h ago',
+              comments: [
+                {
+                  id: '1',
+                  author: 'Emma',
+                  content: "That's amazing! Keep it up! 🙌",
+                  timestamp: '2h ago',
+                },
+                {
+                  id: '2',
+                  author: 'Sarah',
+                  content: 'Which app are you using?',
+                  timestamp: '1h ago',
+                },
+              ],
+            },
+            {
+              id: '2',
+              author: 'Lisa',
+              content:
+                '💪 Hit a new personal record in my workout today! Small wins add up.',
+              timestamp: '5h ago',
+              comments: [
+                {
+                  id: '3',
+                  author: 'Mike',
+                  content: 'Crushing it! 💪',
+                  timestamp: '4h ago',
+                },
+              ],
+            },
+          ],
+          eventPosts: [
+            {
+              id: '1',
+              author: 'Community Team',
+              content:
+                '🏃‍♂️ Join our Virtual 5K Challenge! Track your progress and compete with others in our community. Starting next week!',
+              timestamp: '2h ago',
+              comments: [
+                {
+                  id: '1',
+                  author: 'Sarah',
+                  content:
+                    'Count me in! Been looking for motivation to start running again.',
+                  timestamp: '1h ago',
+                },
+                {
+                  id: '2',
+                  author: 'Mike',
+                  content:
+                    'Is there a specific app we should use to track our runs?',
+                  timestamp: '30m ago',
+                },
+              ],
+            },
+            {
+              id: '2',
+              author: 'Community Team',
+              content:
+                '🧘‍♀️ Weekly Meditation Session - Join us every Monday at 8 AM EST for a guided meditation session to start your week with clarity and focus.',
+              timestamp: '1d ago',
+              comments: [
+                {
+                  id: '3',
+                  author: 'Emma',
+                  content:
+                    'These sessions have been life-changing! Highly recommend.',
+                  timestamp: '20h ago',
+                },
+              ],
+            },
+            {
+              id: '3',
+              author: 'Community Team',
+              content:
+                '💪 30-Day Habit Building Challenge - Start small, stay consistent. Join us in building one positive habit over the next month.',
+              timestamp: '2d ago',
+              comments: [
+                {
+                  id: '4',
+                  author: 'Alex',
+                  content:
+                    "Perfect timing! I've been wanting to establish a morning routine.",
+                  timestamp: '1d ago',
+                },
+              ],
+            },
+          ],
+        },
+      };
+
+      // Save default state to AsyncStorage
+      await AsyncStorage.setItem('userData', JSON.stringify(defaultUserData));
+
+      // Update state with defaults
+      setUserData(defaultUserData);
+
+      console.log('✅ Successfully cleared and reset user data');
     } catch (error) {
       console.error('Error clearing user data:', error);
     }
