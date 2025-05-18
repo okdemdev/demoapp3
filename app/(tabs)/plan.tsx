@@ -51,7 +51,7 @@ export default function PlanScreen() {
       setCurrentWordIndex(index);
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 500,
+        duration: 200,
         useNativeDriver: true,
       }).start();
     },
@@ -62,14 +62,11 @@ export default function PlanScreen() {
     if (!userData?.plan) return;
 
     try {
-      // Update status to generating
       await updateVideoGenerationStatus({
         status: 'generating',
       });
 
       const videoService = VideoService.getInstance();
-
-      // First generate the script and prepare everything
       const {
         script,
         words: newWords,
@@ -81,19 +78,22 @@ export default function PlanScreen() {
       setCurrentWordIndex(0);
       setVideoTheme(newTheme);
 
-      // Update status to completed before starting playback
       await updateVideoGenerationStatus({
         status: 'completed',
       });
 
-      // Start video playback
       if (videoRef.current) {
-        await videoRef.current.playAsync();
+        try {
+          await videoRef.current.setPositionAsync(0);
+          await videoRef.current.playAsync();
+        } catch (error) {
+          console.error('Error playing video:', error);
+        }
       }
 
-      // Start word animation immediately when speech starts
       const startAnimation = () => {
         let index = 0;
+        const wordsPerSecond = 2;
         const interval = setInterval(() => {
           if (index < newWords.length) {
             animateWord(index);
@@ -101,10 +101,9 @@ export default function PlanScreen() {
           } else {
             clearInterval(interval);
           }
-        }, 500); // Change word every 500ms
+        }, 1000 / wordsPerSecond);
       };
 
-      // Start speech with animation callback after loading is complete
       await videoService.speakText(script, startAnimation);
     } catch (error) {
       console.error('Error generating presentation:', error);
@@ -120,15 +119,18 @@ export default function PlanScreen() {
       setCurrentWordIndex(0);
       const videoService = VideoService.getInstance();
 
-      // Restart video
       if (videoRef.current) {
-        await videoRef.current.setPositionAsync(0);
-        await videoRef.current.playAsync();
+        try {
+          await videoRef.current.setPositionAsync(0);
+          await videoRef.current.playAsync();
+        } catch (error) {
+          console.error('Error replaying video:', error);
+        }
       }
 
-      // Start word animation immediately when speech starts
       const startAnimation = () => {
         let index = 0;
+        const wordsPerSecond = 2;
         const interval = setInterval(() => {
           if (index < words.length) {
             animateWord(index);
@@ -136,10 +138,9 @@ export default function PlanScreen() {
           } else {
             clearInterval(interval);
           }
-        }, 500);
+        }, 1000 / wordsPerSecond);
       };
 
-      // Start speech with animation callback
       await videoService.replayLastScript(startAnimation);
     } catch (error) {
       console.error('Error replaying presentation:', error);
@@ -239,7 +240,15 @@ export default function PlanScreen() {
                 resizeMode={ResizeMode.COVER}
                 isLooping
                 isMuted
-                shouldPlay={false}
+                shouldPlay={true}
+                onPlaybackStatusUpdate={(status) => {
+                  if (!status.isLoaded) return;
+                  // If video ends and we're not looping, restart it
+                  if (status.didJustFinish) {
+                    videoRef.current?.setPositionAsync(0);
+                    videoRef.current?.playAsync();
+                  }
+                }}
               />
               <View style={styles.wordOverlay}>
                 <Animated.Text
