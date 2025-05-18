@@ -728,7 +728,7 @@ export default function TodoScreen() {
             </View>
 
             <View style={styles.swipeHint}>
-              <Ionicons name="chevron-forward" size={20} color="#F37335" />
+              <Ionicons name="chevron-forward" size={20} color="#fff" />
               <Text style={styles.swipeText}>Swipe right for options</Text>
             </View>
           </View>
@@ -1153,17 +1153,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 16,
     marginBottom: 8,
-    backgroundColor: 'rgba(243, 115, 53, 0.2)', // F37335 with opacity
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
     alignSelf: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(243, 115, 53, 0.5)',
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
   swipeText: {
     marginLeft: 8,
-    color: '#F37335',
+    color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
   },
