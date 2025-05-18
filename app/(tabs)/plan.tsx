@@ -172,7 +172,7 @@ export default function PlanScreen() {
         <Text style={styles.subtitle}>
           Creating a personalized improvement plan based on your data...
         </Text>
-        <ActivityIndicator size="large" color="#000000" style={styles.loader} />
+        <ActivityIndicator size="large" color="#ffffff" style={styles.loader} />
       </View>
     );
   }
@@ -193,11 +193,11 @@ export default function PlanScreen() {
             <Ionicons
               name={isGeneratingVideo ? 'stop-circle' : 'play'}
               size={24}
-              color="#000000"
+              color="#ffffff"
             />
           </TouchableOpacity>
           <TouchableOpacity style={styles.refreshButton} onPress={generatePlan}>
-            <Ionicons name="refresh" size={24} color="#000000" />
+            <Ionicons name="refresh" size={24} color="#ffffff" />
           </TouchableOpacity>
         </View>
       </View>
@@ -213,7 +213,7 @@ export default function PlanScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {isGeneratingVideo && (
           <View style={styles.videoStatusContainer}>
-            <ActivityIndicator size="small" color="#000000" />
+            <ActivityIndicator size="small" color="#ffffff" />
             <Text style={styles.videoStatusText}>
               Generating presentation...
             </Text>
@@ -288,7 +288,7 @@ export default function PlanScreen() {
                     <Ionicons
                       name={index === 0 ? "cube-outline" : index === 1 ? "sunny-outline" : "heart-outline"}
                       size={24}
-                      color="#000"
+                      color="#ffffff"
                       style={styles.improvementIconFallback}
                     />
                   )}
