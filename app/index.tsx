@@ -74,7 +74,7 @@ export default function WelcomeScreen() {
   const cardRotateX = useRef(new Animated.Value(0)).current;
   const cardRotateY = useRef(new Animated.Value(0)).current;
   const cardScale = useRef(new Animated.Value(1)).current;
-  const [subscriptionGyro, setSubscriptionGyro] = useState(null);
+  const [subscriptionGyro, setSubscriptionGyro] = useState<{ remove: () => void } | null>(null);
 
   // Background animation
   const gradientPosition = useRef(new Animated.Value(0)).current;
@@ -364,16 +364,6 @@ export default function WelcomeScreen() {
             {currentScreen < 2 ? 'Continue' : 'Start Now'}
           </Text>
         </Pressable>
-
-        {currentScreen === 0 && (
-          <Pressable
-            style={[styles.button, styles.resultsButton]}
-            onPress={() => router.push('/results')}
-            disabled={!typingComplete}
-          >
-            <Text style={styles.buttonText}>View Results</Text>
-          </Pressable>
-        )}
       </Animated.View>
     </View>
   );
